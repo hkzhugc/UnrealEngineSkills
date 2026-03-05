@@ -1,5 +1,7 @@
 # Unreal Engine Skills for AI Coding Assistants
 
+[中文版](README_CN.md)
+
 A set of [Claude Code skills](https://docs.anthropic.com/en/docs/claude-code) (also compatible with other LLM coding clients) that give AI assistants deep understanding of the Unreal Engine 4.26 codebase.
 
 ## What This Does

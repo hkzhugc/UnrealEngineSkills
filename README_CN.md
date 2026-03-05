@@ -1,5 +1,7 @@
 # Unreal Engine AI 编程助手技能集
 
+[English](README.md)
+
 一组 [Claude Code 技能](https://docs.anthropic.com/en/docs/claude-code)（同时兼容其他 LLM 编程客户端），让 AI 助手深入理解 Unreal Engine 4.26 代码库。
 
 ## 解决什么问题
