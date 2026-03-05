@@ -1,0 +1,38 @@
+{
+  "description": "Keyword-to-subsystem mapping for reader matching. Maps common terms to the module/subsystem that owns them. Used by ue-knowledge-reader to locate the right subsystem summary.",
+  "mappings": {
+    "Renderer": {
+      "PostProcess": ["bloom", "DOF", "depth of field", "tone map", "tonemapper", "AA", "anti-alias", "motion blur", "eye adaptation", "auto exposure", "post process", "screen space reflection", "SSR", "ambient occlusion", "SSAO", "color grading", "vignette", "lens flare"],
+      "Mobile": ["mobile", "ES3", "ES31", "mobile shader", "mobile pass", "mobile base pass", "mobile rendering"],
+      "RayTracing": ["ray trac", "DXR", "RTX", "RT shadow", "ray tracing", "RTGI", "RT reflection"],
+      "HairStrands": ["hair strand", "groom", "hair rendering", "strand"],
+      "VirtualTexturing": ["virtual texture", "VT", "SVT", "streaming virtual texture"],
+      "CompositionLighting": ["composition", "deferred light", "light composition", "translucency lighting"],
+      "DistanceField": ["distance field", "DFAO", "DF shadow", "global distance field", "mesh distance field"],
+      "Volumetric": ["volumetric fog", "volumetric cloud", "volume rendering", "god ray"],
+      "Light": ["light map", "shadow map", "shadow projection", "capsule shadow", "light render"]
+    },
+    "Engine": {
+      "Animation": ["animation", "montage", "blend space", "skeletal anim", "anim notify", "anim instance", "anim graph"],
+      "Audio": ["audio", "sound", "voice", "submix", "sound cue", "audio component", "attenuation"],
+      "PhysicsEngine": ["physics", "collision", "rigid body", "constraint", "physics scene", "sweep", "overlap"],
+      "AI": ["AI", "behavior tree", "blackboard", "EQS", "environment query", "nav mesh", "pathfinding"],
+      "Networking": ["net", "replication", "RPC", "net driver", "net connection", "bunch"],
+      "Components": ["component", "actor component", "scene component", "primitive component"],
+      "Level": ["level", "world", "streaming level", "level streaming", "world composition"]
+    },
+    "Core": {
+      "Containers": ["TArray", "TMap", "TSet", "container", "sparse array"],
+      "Delegates": ["delegate", "multicast delegate", "dynamic delegate", "event"],
+      "Math": ["FVector", "FRotator", "FTransform", "FQuat", "math", "FMatrix"],
+      "Serialization": ["serialize", "archive", "FArchive", "bulk data", "linker"],
+      "Async": ["async", "task graph", "FRunnable", "thread", "future", "FEvent"]
+    },
+    "UnrealEd": {
+      "Kismet": ["blueprint editor", "kismet", "graph editor", "node", "blueprint graph"],
+      "ContentBrowser": ["content browser", "asset", "asset registry", "thumbnail"],
+      "PropertyEditor": ["property editor", "details panel", "property handle", "customization"],
+      "LevelEditor": ["level editor", "viewport", "editor viewport", "transform widget"]
+    }
+  }
+}

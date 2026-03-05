@@ -3,12 +3,14 @@
 summary batch plan for the calling LLM agent to dispatch.
 
 Phases 1 & 3 are fully automated (no LLM). Phase 2 outputs a JSON
-batch plan that the LLM agent executes via sub-agents.
+batch plan that the LLM agent executes via sub-agents. Phase 2b
+generates subsystem summaries for large modules.
 
 Usage:
-    python init_all.py                    # run phases 1 & 3, plan phase 2
+    python init_all.py                    # run phases 1, 2, 2b & 3
     python init_all.py --phase 1          # only module graph
     python init_all.py --phase 2 --tier 1 # only plan tier-1 summaries
+    python init_all.py --phase 2b         # only plan subsystem summaries
     python init_all.py --phase 3          # only shader map
     python init_all.py --resume           # skip completed phases
 """
@@ -28,7 +30,7 @@ def find_engine_root() -> Path:
     return Path.cwd()
 
 
-def phase_complete(engine_dir: Path, phase: int) -> bool:
+def phase_complete(engine_dir: Path, phase) -> bool:
     """Check whether a phase's output already exists."""
     knowledge_dir = engine_dir / '.claude' / 'knowledge'
     if phase == 1:
@@ -38,6 +40,15 @@ def phase_complete(engine_dir: Path, phase: int) -> bool:
         if not modules_dir.is_dir():
             return False
         return len(list(modules_dir.glob('*.md'))) >= 10  # at least tier 1
+    elif phase == '2b':
+        modules_dir = knowledge_dir / 'modules'
+        if not modules_dir.is_dir():
+            return False
+        # Complete if at least one module has a subsystem subdirectory with .md files
+        for d in modules_dir.iterdir():
+            if d.is_dir() and list(d.glob('*.md')):
+                return True
+        return False
     elif phase == 3:
         return (knowledge_dir / 'shader_map.json').exists()
     return False
@@ -73,10 +84,12 @@ def run_script(script_name: str, extra_args: list, engine_root: Path) -> bool:
 def main():
     parser = argparse.ArgumentParser(description='UE Knowledge Graph - Full Initialization')
     parser.add_argument('--engine-root', type=str, help='Path to engine root')
-    parser.add_argument('--phase', type=int, choices=[1, 2, 3], help='Run only this phase')
+    parser.add_argument('--phase', type=str, choices=['1', '2', '2b', '3'],
+                        help='Run only this phase')
     parser.add_argument('--tier', type=int, choices=[1, 2, 3, 4], help='Tier for phase 2')
     parser.add_argument('--modules', type=str, help='Comma-separated modules for phase 2')
     parser.add_argument('--batch-size', type=int, default=5, help='Batch size for phase 2')
+    parser.add_argument('--min-files', type=int, default=100, help='Min files for phase 2b auto-detection')
     parser.add_argument('--resume', action='store_true', help='Skip completed phases')
     args = parser.parse_args()
 
@@ -93,7 +106,10 @@ def main():
     print(f'Knowledge dir: {engine_dir / ".claude" / "knowledge"}')
 
     # Determine which phases to run
-    phases = [args.phase] if args.phase else [1, 2, 3]
+    if args.phase:
+        phases = [int(args.phase) if args.phase != '2b' else '2b']
+    else:
+        phases = [1, 2, '2b', 3]
 
     results = {}
 
@@ -126,6 +142,17 @@ def main():
             ok = run_script('generate_summaries.py', extra, engine_root)
             results[phase] = 'plan-ready' if ok else 'FAILED'
 
+        elif phase == '2b':
+            # Phase 2b: subsystem summaries for large modules
+            extra = ['--subsystems', '--auto', '--resume',
+                     '--min-files', str(args.min_files)]
+            extra.extend(['--batch-size', str(args.batch_size)])
+            print('  Phase 2b generates a subsystem batch plan (JSON on stdout).')
+            print('  The LLM agent must dispatch sub-agents for each batch.')
+            print('  ---')
+            ok = run_script('generate_summaries.py', extra, engine_root)
+            results[phase] = 'plan-ready' if ok else 'FAILED'
+
         elif phase == 3:
             ok = run_script('generate_shader_map.py', [], engine_root)
             results[phase] = 'ok' if ok else 'FAILED'
@@ -136,8 +163,13 @@ def main():
     print(f'\n{"="*60}')
     print('Summary')
     print(f'{"="*60}')
-    for phase, status in sorted(results.items()):
-        label = {1: 'Module graph', 2: 'Summaries (batch plan)', 3: 'Shader map'}[phase]
+    for phase, status in sorted(results.items(), key=lambda x: str(x[0])):
+        label = {
+            1: 'Module graph',
+            2: 'Summaries (batch plan)',
+            '2b': 'Subsystem summaries (batch plan)',
+            3: 'Shader map',
+        }[phase]
         print(f'  Phase {phase} ({label}): {status}')
 
     if any(v == 'FAILED' for v in results.values()):

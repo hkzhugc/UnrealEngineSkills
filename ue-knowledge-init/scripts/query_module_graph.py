@@ -15,6 +15,7 @@ Usage:
     python query_module_graph.py tree Core --depth 2
     python query_module_graph.py stats
     python query_module_graph.py overview
+    python query_module_graph.py subsystems Renderer
 """
 
 import argparse
@@ -204,6 +205,54 @@ def cmd_overview(modules: dict):
     print(json.dumps(result, indent=2))
 
 
+def cmd_subsystems(engine_root: Path, name: str):
+    """List subsystems for a module, with summary existence status."""
+    knowledge_dir = engine_root / 'Engine' / '.claude' / 'knowledge'
+    index_path = knowledge_dir / 'subsystem_index.json'
+    modules_dir = knowledge_dir / 'modules'
+
+    subsystem_info = []
+
+    # Try subsystem_index.json first
+    if index_path.exists():
+        with open(index_path, 'r', encoding='utf-8') as f:
+            index = json.load(f)
+        module_entry = index.get('modules', {}).get(name, {})
+        subsystem_names = module_entry.get('subsystems', [])
+
+        for s_name in subsystem_names:
+            summary_path = modules_dir / name / f'{s_name}.md'
+            subsystem_info.append({
+                'name': s_name,
+                'summary_exists': summary_path.exists(),
+            })
+    else:
+        # Fall back to checking filesystem for existing summaries
+        subsystem_dir = modules_dir / name
+        if subsystem_dir.is_dir():
+            for md_file in sorted(subsystem_dir.glob('*.md')):
+                subsystem_info.append({
+                    'name': md_file.stem,
+                    'summary_exists': True,
+                })
+
+    if not subsystem_info and not index_path.exists():
+        result = {
+            "module": name,
+            "error": "No subsystem_index.json found. Run: python detect_subsystems.py --auto --save-index",
+            "subsystems": [],
+        }
+    else:
+        result = {
+            "module": name,
+            "subsystems": subsystem_info,
+            "total": len(subsystem_info),
+            "summaries_existing": sum(1 for s in subsystem_info if s['summary_exists']),
+        }
+
+    print(json.dumps(result, indent=2))
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Query module_graph.json without loading the full file into LLM context'
@@ -234,12 +283,21 @@ def main():
     p_stats = sub.add_parser('stats', help='Graph statistics')
     p_overview = sub.add_parser('overview', help='Compact layer-by-layer overview')
 
+    p_subsystems = sub.add_parser('subsystems', help='List subsystems for a module')
+    p_subsystems.add_argument('name', help='Module name')
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
         sys.exit(1)
 
     engine_root = Path(args.engine_root) if args.engine_root else find_engine_root()
+
+    # subsystems command doesn't need the module graph
+    if args.command == 'subsystems':
+        cmd_subsystems(engine_root, args.name)
+        return
+
     data = load_graph(engine_root)
     modules = data.get("modules", {})
 

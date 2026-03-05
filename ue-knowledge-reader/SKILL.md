@@ -23,10 +23,15 @@ Use it to provide informed, accurate context when working with Unreal Engine cod
 Engine/.claude/knowledge/
 ├── module_graph.json      # Module dependency graph (~1274 modules, ~727KB)
 ├── shader_map.json        # .usf/.ush ↔ C++ mappings
+├── subsystem_index.json   # Subsystem detection index (optional)
 ├── changelog.md           # Update history
 └── modules/
     ├── Core.md            # Per-module summaries
     ├── Renderer.md
+    ├── Renderer/           # Subsystem summaries (for large modules)
+    │   ├── PostProcess.md
+    │   ├── Mobile.md
+    │   └── ...
     └── ...
 ```
 
@@ -124,6 +129,32 @@ Shader impact: MobileBasePassVertexShader.usf (check shader_map.json)
 3. For stats: `$QUERY stats`
 4. Present a layered view from the results
 
+### When a question targets a specific area of a large module
+
+Large modules (Renderer, Engine, Core, UnrealEd) have optional **subsystem summaries**
+at `modules/{Module}/{Subsystem}.md` (30-80 lines each). Use these for targeted questions.
+
+1. **Identify parent module** from the question or file path
+2. **Check for subsystem summaries**: `Glob modules/{Module}/*.md`
+3. **Match the relevant subsystem** via one of these methods:
+   - **Keyword match**: question contains subsystem name (case-insensitive)
+     - "mobile base pass" → Module=Renderer, Subsystem=Mobile
+   - **File path match**: user's open file belongs to a subsystem's source dirs
+     - `Renderer/Private/PostProcess/PostProcessBokehDOF.cpp` → Subsystem=PostProcess
+   - **Semantic keywords**: consult `Engine/.claude/skills/ue-knowledge-reader/references/subsystem-keywords.json`
+     - "bloom" → Renderer/PostProcess
+     - "DXR" → Renderer/RayTracing
+     - "montage" → Engine/Animation
+4. **Load the subsystem summary** (+ optionally the top-level module summary for broader context)
+5. If no subsystem summary exists, **generate on-demand** via sub-agent (see below)
+
+**Query subsystems**: `$QUERY subsystems Renderer` — lists detected subsystems and whether summaries exist.
+
+#### Context limits for subsystem loading
+- Load **at most 2 subsystem summaries** per question
+- Subsystem (30-80 lines) + top-level (~100 lines) = ~180 lines budget max
+- Prefer subsystem summary over full module summary for targeted questions
+
 ## Response Format
 
 When providing module context, always include this compact header:
@@ -157,25 +188,23 @@ before the consumers.
 
 - If `module_graph.json` doesn't exist: tell the user to run `/ue-knowledge-init`
   and fall back to Glob/Grep-based exploration
-- If a module's SUMMARY.md doesn't exist: **generate it on demand** (see below)
+- If a module's or subsystem's summary doesn't exist: **generate on demand** (see below)
 - If shader_map.json doesn't exist: grep for shader references manually
-- Never refuse to help just because the knowledge graph is incomplete. Use it
-  when available, fall back to direct code reading when not.
+- Never refuse to help just because the knowledge graph is incomplete.
 
-### On-Demand Summary Generation
+### On-Demand Generation
 
-When you need a module's summary but `modules/{Name}.md` does not exist:
+When a summary is needed but the `.md` file doesn't exist:
 
-1. Query the module info: `$QUERY info {Name}`
-2. Read the **single-module prompt template** from
-   `Engine/.claude/skills/ue-knowledge-init/references/summary-generation-prompt.md`
-   (use the "Single-Module Prompt" section)
-3. Fill in `{placeholders}` with the query result
-4. Launch a **sub-agent** (via the Task tool) with the filled prompt
-5. After the sub-agent completes, read the generated summary and continue
+1. **Module summary** (`modules/{Name}.md` missing):
+   - Query: `$QUERY info {Name}`
+   - Prompt: use "Single-Module Prompt" from `references/summary-generation-prompt.md`
+2. **Subsystem summary** (`modules/{Module}/{Subsystem}.md` missing):
+   - Query: `$QUERY subsystems {Module}`
+   - Prompt: use "Single-Subsystem Prompt" from `references/summary-generation-prompt.md`
 
-This keeps the reader self-sufficient — it can fill knowledge gaps without
-requiring the user to manually run `/ue-knowledge-init`.
+In both cases: fill in `{placeholders}`, launch a **sub-agent** (Task tool),
+then read the generated summary and continue.
 
 ## Keeping Context Lean
 

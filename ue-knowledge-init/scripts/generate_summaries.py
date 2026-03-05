@@ -14,6 +14,11 @@ Usage:
     python generate_summaries.py --batch-size 3           # smaller batches
     python generate_summaries.py --resume                 # skip existing .md files
 
+    # Subsystem mode:
+    python generate_summaries.py --subsystems --module Renderer --resume
+    python generate_summaries.py --subsystems --auto --min-files 100 --resume
+    python generate_summaries.py --subsystems --module Renderer --only PostProcess,Mobile
+
 Output (stdout): JSON batch plan consumed by the orchestrating agent.
 """
 
@@ -68,6 +73,14 @@ def get_existing_summaries(modules_dir: Path) -> set:
     return {p.stem for p in modules_dir.glob('*.md')}
 
 
+def get_existing_subsystem_summaries(modules_dir: Path, module_name: str) -> set:
+    """Return set of subsystem names that already have .md files for a module."""
+    subdir = modules_dir / module_name
+    if not subdir.is_dir():
+        return set()
+    return {p.stem for p in subdir.glob('*.md')}
+
+
 def order_modules(module_names: list, tier: int = None) -> list:
     """Order modules by tier priority, then alphabetically."""
     if tier is not None:
@@ -93,11 +106,145 @@ def main():
     parser.add_argument('--batch-size', type=int, default=5, help='Modules per batch (default: 5)')
     parser.add_argument('--resume', action='store_true', help='Skip modules that already have .md files')
     parser.add_argument('--output-dir', type=str, help='Override output directory for resume check')
+    # Subsystem mode arguments
+    parser.add_argument('--subsystems', action='store_true', help='Generate subsystem summary plan')
+    parser.add_argument('--module', type=str, help='Single module name for subsystem mode')
+    parser.add_argument('--auto', action='store_true', help='Auto-detect large modules for subsystem mode')
+    parser.add_argument('--min-files', type=int, default=100, help='Min files for --auto (default: 100)')
+    parser.add_argument('--only', type=str, help='Comma-separated subsystem names to include')
     args = parser.parse_args()
 
     engine_root = Path(args.engine_root) if args.engine_root else find_engine_root()
     engine_dir = engine_root / 'Engine'
 
+    if args.subsystems:
+        plan_subsystem_summaries(args, engine_root, engine_dir)
+    else:
+        plan_module_summaries(args, engine_root, engine_dir)
+
+
+def plan_subsystem_summaries(args, engine_root: Path, engine_dir: Path):
+    """Plan subsystem summary generation using detect_subsystems."""
+    # Import the detection module
+    scripts_dir = Path(__file__).resolve().parent
+    sys.path.insert(0, str(scripts_dir))
+    from detect_subsystems import detect_subsystems, find_module_path, find_large_modules
+
+    modules_dir = Path(args.output_dir) if args.output_dir else engine_dir / '.claude' / 'knowledge' / 'modules'
+    graph_path = engine_dir / '.claude' / 'knowledge' / 'module_graph.json'
+
+    # Load module graph for metadata
+    module_graph = {}
+    if graph_path.exists():
+        module_graph = load_module_graph(graph_path)
+
+    # Determine which modules to process
+    if args.auto:
+        large_modules = find_large_modules(engine_root, args.min_files, graph_path)
+        targets = [(name, path) for name, path, _ in large_modules]
+    elif args.module:
+        names = [n.strip() for n in args.module.split(',')]
+        targets = []
+        for name in names:
+            path = find_module_path(engine_root, name)
+            if path:
+                targets.append((name, path))
+            else:
+                print(json.dumps({'warning': f'Module not found: {name}'}),
+                      file=sys.stderr)
+    elif args.modules:
+        # Also support --modules for consistency
+        names = [n.strip() for n in args.modules.split(',')]
+        targets = []
+        for name in names:
+            path = find_module_path(engine_root, name)
+            if path:
+                targets.append((name, path))
+    else:
+        print(json.dumps({'error': 'Subsystem mode requires --module, --modules, or --auto'}))
+        sys.exit(1)
+
+    if not targets:
+        print(json.dumps({'error': 'No modules found to analyze'}))
+        sys.exit(1)
+
+    # Filter subsystem names if --only specified
+    only_subsystems = None
+    if args.only:
+        only_subsystems = {n.strip() for n in args.only.split(',')}
+
+    batch_size = args.batch_size if args.batch_size != 5 else 4  # default 4 for subsystems
+
+    all_plans = []
+
+    for module_name, module_path in targets:
+        # Run detection
+        detection = detect_subsystems(module_path)
+        subsystems = detection.get('subsystems', [])
+
+        if not subsystems:
+            continue
+
+        # Filter by --only
+        if only_subsystems:
+            subsystems = [s for s in subsystems if s['name'] in only_subsystems]
+
+        # Resume: skip existing subsystem summaries
+        if args.resume:
+            existing = get_existing_subsystem_summaries(modules_dir, module_name)
+            skipped = [s for s in subsystems if s['name'] in existing]
+            subsystems = [s for s in subsystems if s['name'] not in existing]
+        else:
+            skipped = []
+
+        if not subsystems:
+            continue
+
+        # Get parent module info from graph
+        parent_info = module_graph.get(module_name, {})
+        parent_module = {
+            'name': module_name,
+            'path': str(module_path).replace('\\', '/'),
+            'type': parent_info.get('type', 'Unknown'),
+            'layer': parent_info.get('layer', 0),
+        }
+
+        # Split into batches
+        batches = []
+        for i in range(0, len(subsystems), batch_size):
+            batches.append(subsystems[i:i + batch_size])
+
+        plan = {
+            'mode': 'subsystems',
+            'parent_module': parent_module,
+            'total_subsystems': len(subsystems),
+            'total_batches': len(batches),
+            'batch_size': batch_size,
+            'skipped': [s['name'] for s in skipped],
+            'batches': batches,
+        }
+        all_plans.append(plan)
+
+    # Output
+    if len(all_plans) == 1:
+        output = all_plans[0]
+    else:
+        output = {
+            'mode': 'subsystems',
+            'engine_root': str(engine_root).replace('\\', '/'),
+            'modules_dir': str(modules_dir).replace('\\', '/'),
+            'total_modules': len(all_plans),
+            'plans': all_plans,
+        }
+
+    output['engine_root'] = str(engine_root).replace('\\', '/')
+    output['modules_dir'] = str(modules_dir).replace('\\', '/')
+
+    print(json.dumps(output, indent=2, ensure_ascii=False))
+
+
+def plan_module_summaries(args, engine_root: Path, engine_dir: Path):
+    """Original module summary planning logic."""
     # Load module graph
     graph_path = engine_dir / '.claude' / 'knowledge' / 'module_graph.json'
     if not graph_path.exists():

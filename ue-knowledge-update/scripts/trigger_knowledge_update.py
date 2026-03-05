@@ -29,6 +29,7 @@ REPO_ROOT = REPO_ROOT.parent
 
 KNOWLEDGE_DIR = REPO_ROOT / "Engine" / ".claude" / "knowledge"
 MODULE_GRAPH = KNOWLEDGE_DIR / "module_graph.json"
+SUBSYSTEM_INDEX = KNOWLEDGE_DIR / "subsystem_index.json"
 
 # Modules in these paths are typically not worth updating knowledge for
 SKIP_PATTERNS = [
@@ -38,6 +39,22 @@ SKIP_PATTERNS = [
     "Engine/Documentation/",
     "Engine/.claude/knowledge/",  # Don't trigger on our own output
 ]
+
+# Cached subsystem index (loaded once on first use)
+_subsystem_index = None
+
+
+def load_subsystem_index():
+    """Load subsystem_index.json for subsystem detection."""
+    global _subsystem_index
+    if _subsystem_index is not None:
+        return _subsystem_index
+    if SUBSYSTEM_INDEX.exists():
+        with open(SUBSYSTEM_INDEX, 'r', encoding='utf-8') as f:
+            _subsystem_index = json.load(f)
+    else:
+        _subsystem_index = {}
+    return _subsystem_index
 
 
 def run_git(args, cwd=None):
@@ -77,10 +94,47 @@ def should_skip(filepath):
     return False
 
 
+def detect_subsystem(module_name, filepath, parts):
+    """Detect which subsystem a file belongs to, if any.
+
+    Returns subsystem name or None.
+    Detection methods:
+    1. Subdirectory of Private/Public/Classes → dir name
+    2. Filename prefix → known prefix cluster from subsystem_index.json
+    """
+    # Method 1: Subdirectory detection
+    for i, part in enumerate(parts):
+        if part in ('Private', 'Public', 'Classes') and i + 1 < len(parts):
+            # Check if next part is a subdirectory (not a file)
+            next_part = parts[i + 1]
+            # If there are more parts after, it's a subdirectory
+            if i + 2 < len(parts):
+                return next_part
+
+    # Method 2: Prefix cluster from subsystem_index.json
+    index = load_subsystem_index()
+    module_entry = index.get('modules', {}).get(module_name, {})
+    known_subsystems = module_entry.get('subsystems', [])
+
+    if known_subsystems:
+        # Extract filename stem and match against known subsystem prefixes
+        stem = Path(filepath).stem
+        # Strip common UE prefixes (F, U, A, etc.)
+        clean = stem
+        if len(clean) > 1 and clean[0] in ('F', 'U', 'A', 'I', 'E', 'T') and len(clean) > 1 and clean[1].isupper():
+            clean = clean[1:]
+
+        for subsystem in known_subsystems:
+            if clean.startswith(subsystem):
+                return subsystem
+
+    return None
+
+
 def classify_file(filepath):
-    """Classify a changed file into module and change type."""
+    """Classify a changed file into module, change type, and subsystem."""
     if should_skip(filepath):
-        return None, None
+        return None, None, None
 
     path = Path(filepath)
     parts = path.parts
@@ -89,57 +143,67 @@ def classify_file(filepath):
     if filepath.endswith(".Build.cs"):
         change_type = "dependency"
         module_name = path.stem
-        return module_name, change_type
+        return module_name, change_type, None
 
     if filepath.endswith(".uplugin"):
-        return path.stem, "plugin"
+        return path.stem, "plugin", None
 
     if filepath.endswith((".usf", ".ush")):
-        return path.stem, "shader"
+        return path.stem, "shader", None
 
     if filepath.endswith((".h", ".hpp")):
         for i, part in enumerate(parts):
             if part == "Public" or part == "Classes":
                 if i >= 1:
-                    return parts[i - 1], "api"
+                    module_name = parts[i - 1]
+                    subsystem = detect_subsystem(module_name, filepath, parts)
+                    return module_name, "api", subsystem
         # Private header
         for i, part in enumerate(parts):
             if part == "Private":
                 if i >= 1:
-                    return parts[i - 1], "implementation"
+                    module_name = parts[i - 1]
+                    subsystem = detect_subsystem(module_name, filepath, parts)
+                    return module_name, "implementation", subsystem
 
     if filepath.endswith((".cpp", ".c")):
         for i, part in enumerate(parts):
             if part in ("Private", "Public"):
                 if i >= 1:
-                    return parts[i - 1], "implementation"
+                    module_name = parts[i - 1]
+                    subsystem = detect_subsystem(module_name, filepath, parts)
+                    return module_name, "implementation", subsystem
 
     # Fallback: try to extract module from Source/<Type>/<Module>/ pattern
     for i, part in enumerate(parts):
         if part == "Source" and i + 2 < len(parts):
             candidate = parts[i + 1]
             if candidate in ("Runtime", "Editor", "Developer", "ThirdParty", "Programs"):
-                return parts[i + 2], "implementation"
+                return parts[i + 2], "implementation", None
             else:
-                return candidate, "implementation"
+                return candidate, "implementation", None
 
-    return None, None
+    return None, None, None
 
 
 def analyze_changes(changed_files):
     """Analyze all changed files and group by module."""
-    modules = {}  # module_name → set of change_types
+    modules = {}  # module_name → {'change_types': set, 'subsystems': dict}
     build_cs_changed = False
     shader_changed = False
 
     for f in changed_files:
         if not f.strip():
             continue
-        module, change_type = classify_file(f)
+        module, change_type, subsystem = classify_file(f)
         if module and change_type:
             if module not in modules:
-                modules[module] = set()
-            modules[module].add(change_type)
+                modules[module] = {'change_types': set(), 'subsystems': {}}
+            modules[module]['change_types'].add(change_type)
+            if subsystem:
+                if subsystem not in modules[module]['subsystems']:
+                    modules[module]['subsystems'][subsystem] = set()
+                modules[module]['subsystems'][subsystem].add(change_type)
             if change_type == "dependency":
                 build_cs_changed = True
             if change_type == "shader":
@@ -158,9 +222,17 @@ def build_prompt(modules, build_cs_changed, shader_changed, commit_hash, commit_
         "Affected modules and change types:",
     ]
 
-    for module, change_types in sorted(modules.items()):
-        types_str = ", ".join(sorted(change_types))
-        lines.append(f"  - {module}: {types_str}")
+    for module, info in sorted(modules.items()):
+        types_str = ", ".join(sorted(info['change_types']))
+        subsystems = info.get('subsystems', {})
+        if subsystems:
+            sub_parts = []
+            for sub_name, sub_types in sorted(subsystems.items()):
+                sub_parts.append(f"{sub_name}: {', '.join(sorted(sub_types))}")
+            sub_str = "; ".join(sub_parts)
+            lines.append(f"  - {module}: {types_str} (subsystems: {sub_str})")
+        else:
+            lines.append(f"  - {module}: {types_str}")
 
     if build_cs_changed:
         lines.append("")
@@ -243,6 +315,11 @@ def main():
 
     print(f"[knowledge-update] Commit {commit_hash}: {commit_msg}")
     print(f"[knowledge-update] Affected modules: {', '.join(sorted(modules.keys()))}")
+    # Report subsystem detections
+    for mod_name, mod_info in sorted(modules.items()):
+        subs = mod_info.get('subsystems', {})
+        if subs:
+            print(f"[knowledge-update]   {mod_name} subsystems: {', '.join(sorted(subs.keys()))}")
     print(f"[knowledge-update] Build.cs changed: {build_cs_changed}")
     print(f"[knowledge-update] Shaders changed: {shader_changed}")
 
