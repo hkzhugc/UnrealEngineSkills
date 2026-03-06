@@ -20,14 +20,15 @@ import os
 import json
 from pathlib import Path
 
-# Resolve paths relative to this script's location
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parent.parent.parent.parent  # scripts/ → ue-knowledge-update/ → skills/ → .claude/ → Engine/
-# Adjust: we want the actual repo root, not Engine/
-# The repo root is one level above Engine/
-REPO_ROOT = REPO_ROOT.parent
+# Import shared resolution utilities from ue-knowledge-init
+_init_scripts = Path(__file__).resolve().parent.parent.parent / 'ue-knowledge-init' / 'scripts'
+sys.path.insert(0, str(_init_scripts))
+from _resolve import find_engine_root, agent_dir_name, knowledge_dir
 
-KNOWLEDGE_DIR = REPO_ROOT / "Engine" / ".claude" / "knowledge"
+# Resolve paths relative to this script's location
+REPO_ROOT = find_engine_root()
+
+KNOWLEDGE_DIR = knowledge_dir(REPO_ROOT)
 MODULE_GRAPH = KNOWLEDGE_DIR / "module_graph.json"
 SUBSYSTEM_INDEX = KNOWLEDGE_DIR / "subsystem_index.json"
 
@@ -37,7 +38,7 @@ SKIP_PATTERNS = [
     "Engine/Intermediate/",
     "Engine/Saved/",
     "Engine/Documentation/",
-    "Engine/.claude/knowledge/",  # Don't trigger on our own output
+    f"Engine/{agent_dir_name()}/knowledge/",  # Don't trigger on our own output
 ]
 
 # Cached subsystem index (loaded once on first use)

@@ -21,6 +21,8 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+from _resolve import find_engine_root, knowledge_dir
+
 
 # ---------------------------------------------------------------------------
 # Dependency extraction regexes
@@ -58,15 +60,6 @@ _FIELD_MAP = {
     'CircularlyReferencedDependentModules': 'circular_deps',
     'DynamicallyLoadedModuleNames': 'dynamic_deps',
 }
-
-
-def find_engine_root() -> Path:
-    """Walk up from script location to find the engine root (contains Engine/)."""
-    p = Path(__file__).resolve()
-    for parent in [p] + list(p.parents):
-        if (parent / 'Engine' / 'Source').is_dir():
-            return parent
-    return Path.cwd()
 
 
 def classify_type(rel_path: str) -> str:
@@ -362,7 +355,7 @@ def main():
         'modules': dict(sorted(modules.items())),
     }
 
-    out_path = Path(args.output) if args.output else engine_dir / '.claude' / 'knowledge' / 'module_graph.json'
+    out_path = Path(args.output) if args.output else knowledge_dir(engine_root) / 'module_graph.json'
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(out_path, 'w', encoding='utf-8') as f:

@@ -21,6 +21,8 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+from _resolve import find_engine_root, knowledge_dir
+
 
 _RE_INCLUDE = re.compile(r'#include\s+"([^"]+)"')
 
@@ -33,15 +35,6 @@ _RE_SHADER_IMPL = re.compile(
 
 # Matches: FShaderFilenameToContentMap with virtual path references
 _RE_SHADER_PATH = re.compile(r'"/Engine/([^"]+\.(?:usf|ush))"')
-
-
-def find_engine_root() -> Path:
-    """Walk up from script location to find the engine root."""
-    p = Path(__file__).resolve()
-    for parent in [p] + list(p.parents):
-        if (parent / 'Engine' / 'Source').is_dir():
-            return parent
-    return Path.cwd()
 
 
 def extract_includes(text: str) -> list:
@@ -227,7 +220,7 @@ def main():
         'shaders': shaders,
     }
 
-    out_path = Path(args.output) if args.output else engine_dir / '.claude' / 'knowledge' / 'shader_map.json'
+    out_path = Path(args.output) if args.output else knowledge_dir(engine_root) / 'shader_map.json'
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(out_path, 'w', encoding='utf-8') as f:

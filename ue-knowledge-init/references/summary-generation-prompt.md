@@ -1,5 +1,10 @@
 # Summary Generation — Sub-Agent Prompt
 
+> **Note**: Paths below use `.claude` as the agent config directory. If your AI
+> assistant uses a different directory (`.windsurf`, `.cursor`, etc.), substitute
+> accordingly. Python scripts auto-detect the correct directory; set env var
+> `AGENT_DIR_NAME` to override.
+
 Shared prompt template used by `ue-knowledge-init`, `ue-knowledge-reader`,
 and `ue-knowledge-update` when generating summaries via sub-agents.
 

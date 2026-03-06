@@ -13,6 +13,11 @@ allowed-tools: Read Write Edit Bash(python*,git*) Glob Grep Task
 
 # UE Knowledge Graph — Cold Start Generator
 
+> **Note**: Paths below use `.claude` as the agent config directory. If your AI
+> assistant uses a different directory (`.windsurf`, `.cursor`, etc.), substitute
+> accordingly. Python scripts auto-detect the correct directory; set env var
+> `AGENT_DIR_NAME` to override.
+
 Bootstraps the structured knowledge graph at `Engine/.claude/knowledge/`.
 
 ## Pre-flight

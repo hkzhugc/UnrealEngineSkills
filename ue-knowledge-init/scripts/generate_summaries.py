@@ -29,6 +29,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from _resolve import find_engine_root, knowledge_dir
+
 # ---------------------------------------------------------------------------
 # Tier definitions
 # ---------------------------------------------------------------------------
@@ -48,15 +50,6 @@ TIERS = {
         'GraphEditor', 'ContentBrowser', 'Sequencer', 'Persona',
     ],
 }
-
-
-def find_engine_root() -> Path:
-    """Walk up from script location to find the engine root."""
-    p = Path(__file__).resolve()
-    for parent in [p] + list(p.parents):
-        if (parent / 'Engine' / 'Source').is_dir():
-            return parent
-    return Path.cwd()
 
 
 def load_module_graph(graph_path: Path) -> dict:
@@ -130,8 +123,8 @@ def plan_subsystem_summaries(args, engine_root: Path, engine_dir: Path):
     sys.path.insert(0, str(scripts_dir))
     from detect_subsystems import detect_subsystems, find_module_path, find_large_modules
 
-    modules_dir = Path(args.output_dir) if args.output_dir else engine_dir / '.claude' / 'knowledge' / 'modules'
-    graph_path = engine_dir / '.claude' / 'knowledge' / 'module_graph.json'
+    modules_dir = Path(args.output_dir) if args.output_dir else knowledge_dir(engine_root) / 'modules'
+    graph_path = knowledge_dir(engine_root) / 'module_graph.json'
 
     # Load module graph for metadata
     module_graph = {}
@@ -246,7 +239,7 @@ def plan_subsystem_summaries(args, engine_root: Path, engine_dir: Path):
 def plan_module_summaries(args, engine_root: Path, engine_dir: Path):
     """Original module summary planning logic."""
     # Load module graph
-    graph_path = engine_dir / '.claude' / 'knowledge' / 'module_graph.json'
+    graph_path = knowledge_dir(engine_root) / 'module_graph.json'
     if not graph_path.exists():
         print(json.dumps({'error': f'{graph_path} not found. Run parse_module_graph.py first.'}))
         sys.exit(1)
@@ -273,7 +266,7 @@ def plan_module_summaries(args, engine_root: Path, engine_dir: Path):
         ordered = order_modules(target_names)
 
     # Resume: skip existing
-    modules_dir = Path(args.output_dir) if args.output_dir else engine_dir / '.claude' / 'knowledge' / 'modules'
+    modules_dir = Path(args.output_dir) if args.output_dir else knowledge_dir(engine_root) / 'modules'
     existing = get_existing_summaries(modules_dir)
     skipped = []
 

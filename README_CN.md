@@ -2,6 +2,10 @@
 
 [English](README.md)
 
+> **注意**：以下路径使用 `.claude` 作为 AI 助手配置目录名。如果您使用的工具
+> 目录不同（如 `.windsurf`、`.cursor` 等），请相应替换。Python 脚本会自动
+> 检测正确目录，也可通过环境变量 `AGENT_DIR_NAME` 覆盖。
+
 一组 [Claude Code 技能](https://docs.anthropic.com/en/docs/claude-code)（同时兼容其他 LLM 编程客户端），让 AI 助手深入理解 Unreal Engine 4.26 代码库。
 
 ## 解决什么问题

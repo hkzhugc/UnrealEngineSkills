@@ -20,28 +20,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-
-def find_engine_root() -> Path:
-    """Walk up from script location to find the engine root."""
-    p = Path(__file__).resolve()
-    for parent in [p] + list(p.parents):
-        if (parent / 'Engine' / 'Source').is_dir():
-            return parent
-    return Path.cwd()
+from _resolve import find_engine_root, knowledge_dir, skills_dir
 
 
 def phase_complete(engine_dir: Path, phase) -> bool:
     """Check whether a phase's output already exists."""
-    knowledge_dir = engine_dir / '.claude' / 'knowledge'
+    kn_dir = knowledge_dir(engine_dir.parent)
     if phase == 1:
-        return (knowledge_dir / 'module_graph.json').exists()
+        return (kn_dir / 'module_graph.json').exists()
     elif phase == 2:
-        modules_dir = knowledge_dir / 'modules'
+        modules_dir = kn_dir / 'modules'
         if not modules_dir.is_dir():
             return False
         return len(list(modules_dir.glob('*.md'))) >= 10  # at least tier 1
     elif phase == '2b':
-        modules_dir = knowledge_dir / 'modules'
+        modules_dir = kn_dir / 'modules'
         if not modules_dir.is_dir():
             return False
         # Complete if at least one module has a subsystem subdirectory with .md files
@@ -50,15 +43,14 @@ def phase_complete(engine_dir: Path, phase) -> bool:
                 return True
         return False
     elif phase == 3:
-        return (knowledge_dir / 'shader_map.json').exists()
+        return (kn_dir / 'shader_map.json').exists()
     return False
 
 
 def run_script(script_name: str, extra_args: list, engine_root: Path) -> bool:
     """Run a phase script, returning True on success."""
     scripts_dir = (
-        engine_root / 'Engine' / '.claude' / 'skills' /
-        'ue-knowledge-init' / 'scripts'
+        skills_dir(engine_root) / 'ue-knowledge-init' / 'scripts'
     )
     script_path = scripts_dir / script_name
 
@@ -103,7 +95,7 @@ def main():
         sys.exit(1)
 
     print(f'Engine root: {engine_root}')
-    print(f'Knowledge dir: {engine_dir / ".claude" / "knowledge"}')
+    print(f'Knowledge dir: {knowledge_dir(engine_root)}')
 
     # Determine which phases to run
     if args.phase:

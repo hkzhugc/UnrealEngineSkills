@@ -12,6 +12,11 @@ allowed-tools: Read Write Edit Bash(git:*,python*) Glob Grep Task
 
 # UE Knowledge Graph - Incremental Updater
 
+> **Note**: Paths below use `.claude` as the agent config directory. If your AI
+> assistant uses a different directory (`.windsurf`, `.cursor`, etc.), substitute
+> accordingly. Python scripts auto-detect the correct directory; set env var
+> `AGENT_DIR_NAME` to override.
+
 You are incrementally updating an existing knowledge graph for an Unreal Engine
 codebase. The graph lives in `Engine/.claude/knowledge/`.
 

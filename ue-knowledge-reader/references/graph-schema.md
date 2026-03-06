@@ -1,5 +1,10 @@
 # Module Graph JSON Schema
 
+> **Note**: Paths below use `.claude` as the agent config directory. If your AI
+> assistant uses a different directory (`.windsurf`, `.cursor`, etc.), substitute
+> accordingly. Python scripts auto-detect the correct directory; set env var
+> `AGENT_DIR_NAME` to override.
+
 Quick reference for the structure of `Engine/.claude/knowledge/module_graph.json`.
 
 > **Warning**: This file is ~727KB / 27K lines. **Never read it directly** in

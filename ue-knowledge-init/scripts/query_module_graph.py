@@ -23,17 +23,11 @@ import json
 import sys
 from pathlib import Path
 
-
-def find_engine_root() -> Path:
-    p = Path(__file__).resolve()
-    for parent in [p] + list(p.parents):
-        if (parent / 'Engine' / 'Source').is_dir():
-            return parent
-    return Path.cwd()
+from _resolve import find_engine_root, knowledge_dir
 
 
 def load_graph(engine_root: Path) -> dict:
-    graph_path = engine_root / 'Engine' / '.claude' / 'knowledge' / 'module_graph.json'
+    graph_path = knowledge_dir(engine_root) / 'module_graph.json'
     if not graph_path.exists():
         print(f'{{"error": "module_graph.json not found at {graph_path}. Run parse_module_graph.py first."}}')
         sys.exit(1)
@@ -207,9 +201,9 @@ def cmd_overview(modules: dict):
 
 def cmd_subsystems(engine_root: Path, name: str):
     """List subsystems for a module, with summary existence status."""
-    knowledge_dir = engine_root / 'Engine' / '.claude' / 'knowledge'
-    index_path = knowledge_dir / 'subsystem_index.json'
-    modules_dir = knowledge_dir / 'modules'
+    kn_dir = knowledge_dir(engine_root)
+    index_path = kn_dir / 'subsystem_index.json'
+    modules_dir = kn_dir / 'modules'
 
     subsystem_info = []
 

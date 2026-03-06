@@ -10,6 +10,11 @@ description: >
 
 # UE Script Catalog — Discover & Execute Engine Functions
 
+> **Note**: Paths below use `.claude` as the agent config directory. If your AI
+> assistant uses a different directory (`.windsurf`, `.cursor`, etc.), substitute
+> accordingly. Python scripts auto-detect the correct directory; set env var
+> `AGENT_DIR_NAME` to override.
+
 You have access to a **callable catalog** that describes every Blueprint-callable function
 in the engine, plus MCP commands to execute Python code directly inside the Unreal Editor.
 

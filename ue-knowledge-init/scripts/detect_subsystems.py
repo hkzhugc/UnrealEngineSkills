@@ -23,6 +23,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from _resolve import find_engine_root, knowledge_dir
+
 SOURCE_EXTS = {'.h', '.hpp', '.cpp', '.c', '.inl'}
 SOURCE_ROOTS = ('Private', 'Public', 'Classes')
 SKIP_DIRS = {'Tests', 'Test', 'ThirdParty'}
@@ -33,15 +35,6 @@ PLATFORM_DIRS = {
 
 # Minimum total files for a module to have subsystems detected
 MIN_MODULE_FILES = 30
-
-
-def find_engine_root() -> Path:
-    """Walk up from script location to find the engine root."""
-    p = Path(__file__).resolve()
-    for parent in [p] + list(p.parents):
-        if (parent / 'Engine' / 'Source').is_dir():
-            return parent
-    return Path.cwd()
 
 
 def count_source_files(directory: Path) -> int:
@@ -354,7 +347,7 @@ def main():
         sys.exit(1)
 
     engine_root = Path(args.engine_root) if args.engine_root else find_engine_root()
-    graph_path = engine_root / 'Engine' / '.claude' / 'knowledge' / 'module_graph.json'
+    graph_path = knowledge_dir(engine_root) / 'module_graph.json'
 
     # Determine which modules to analyze
     if args.auto:
@@ -406,9 +399,9 @@ def main():
                 'file_count': r.get('total_files', 0),
             }
 
-        knowledge_dir = engine_root / 'Engine' / '.claude' / 'knowledge'
-        knowledge_dir.mkdir(parents=True, exist_ok=True)
-        index_path = knowledge_dir / 'subsystem_index.json'
+        kn_dir = knowledge_dir(engine_root)
+        kn_dir.mkdir(parents=True, exist_ok=True)
+        index_path = kn_dir / 'subsystem_index.json'
         with open(index_path, 'w', encoding='utf-8') as f:
             json.dump(index, f, indent=2, ensure_ascii=False)
         print(f'\nIndex written to: {index_path}', file=sys.stderr)

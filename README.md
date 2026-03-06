@@ -2,6 +2,11 @@
 
 [中文版](README_CN.md)
 
+> **Note**: Paths below use `.claude` as the agent config directory. If your AI
+> assistant uses a different directory (`.windsurf`, `.cursor`, etc.), substitute
+> accordingly. Python scripts auto-detect the correct directory; set env var
+> `AGENT_DIR_NAME` to override.
+
 A set of [Claude Code skills](https://docs.anthropic.com/en/docs/claude-code) (also compatible with other LLM coding clients) that give AI assistants deep understanding of the Unreal Engine 4.26 codebase.
 
 ## What This Does

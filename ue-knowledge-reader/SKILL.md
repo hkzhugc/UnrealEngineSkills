@@ -14,6 +14,11 @@ allowed-tools: Read Write Bash(python*) Glob Grep Task
 
 # UE Knowledge Graph - Reader & Navigator
 
+> **Note**: Paths below use `.claude` as the agent config directory. If your AI
+> assistant uses a different directory (`.windsurf`, `.cursor`, etc.), substitute
+> accordingly. Python scripts auto-detect the correct directory; set env var
+> `AGENT_DIR_NAME` to override.
+
 You have access to a structured knowledge graph in `Engine/.claude/knowledge/`.
 Use it to provide informed, accurate context when working with Unreal Engine code.
 
