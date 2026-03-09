@@ -420,15 +420,16 @@ def classify_subsystem(
     for subdir_name in SOURCE_SUBDIRS:
         src_root = src_module / subdir_name / subsystem_name
         tgt_root = tgt_module / subdir_name / subsystem_name
-        for root, files_dict in [
-            (src_root, src_files),
-            (tgt_root, tgt_files),
+        for root, module_root, files_dict in [
+            (src_root, src_module, src_files),
+            (tgt_root, tgt_module, tgt_files),
         ]:
             if not root.is_dir():
                 continue
             for p in root.rglob("*"):
                 if p.is_file() and p.suffix.lower() in SOURCE_EXTENSIONS:
-                    rel = p.relative_to(root).as_posix()
+                    # Key relative to module root so symbol extraction paths match
+                    rel = p.relative_to(module_root).as_posix()
                     try:
                         size = p.stat().st_size
                         md5 = file_md5(p)
@@ -437,12 +438,8 @@ def classify_subsystem(
                         md5 = ""
                     files_dict[rel] = (size, md5)
 
-    # Use the subsystem dirs as module roots for symbol extraction
-    src_sub_root = src_module  # symbols extracted relative to module root
-    tgt_sub_root = tgt_module
-
     added, removed, modified, _, changed_files = classify_file_changes(
-        src_files, tgt_files, src_sub_root, tgt_sub_root
+        src_files, tgt_files, src_module, tgt_module
     )
     rate = compute_change_rate(added, removed, modified, len(src_files))
     cat = categorize(rate)

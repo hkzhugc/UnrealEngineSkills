@@ -143,14 +143,23 @@ writing to the **target** knowledge directory.
 
 ### Subsystem handling
 
-After processing a module's top-level summary, process its subsystems using the
-same category logic. Each subsystem's `category` is listed in the `subsystems`
-array of the module JSON entry.
+**REQUIRED** — after every module's top-level summary is written, you MUST also
+process its subsystems. Do not proceed to the next module until all subsystems of
+the current module are done.
 
-- Use the **Subsystem Variants** section of `port-prompt.md`
-- Write to `{target_knowledge_dir}/modules/{ModuleName}/{SubsystemName}.md`
-- Read parent module summary once, reuse for all subsystems in that module
-- Batch up to 4 subsystems per sub-agent turn
+For each module entry whose `subsystems` array is non-empty:
+
+1. Collect all subsystem entries from `module.subsystems`
+2. Group them into batches of up to 4
+3. For each batch, dispatch a sub-agent using the **Subsystem Variants** section
+   of `port-prompt.md`, with:
+   - `{ModuleName}` = the parent module name
+   - `{SubsystemName}` = the subsystem name
+   - `{changed_files_json}` = the subsystem's own `changed_files` array
+   - Write path: `{target_knowledge_dir}/modules/{ModuleName}/{SubsystemName}.md`
+4. Verify each `.md` file exists before dispatching the next batch
+
+If a module has zero subsystems (`subsystems: []`), skip this step and move on.
 
 ### Processing order
 
@@ -161,6 +170,16 @@ Process modules in tier order (to respect dependencies):
 
 Within each tier, process by category: `unchanged` first (fast), then
 `minor`, `major`, `rewritten`/`new` last (most LLM work).
+
+For each module, the mandatory execution sequence is:
+```
+1. Dispatch module top-level summary sub-agent
+2. Verify {target_knowledge_dir}/modules/{Name}.md was written
+3. For each subsystem batch → dispatch subsystem sub-agent (see Subsystem handling)
+4. Verify each subsystem .md was written
+5. Move to next module
+```
+Do NOT skip step 3 even if the module category is `unchanged`.
 
 ## Phase 3: Validate and Report
 
