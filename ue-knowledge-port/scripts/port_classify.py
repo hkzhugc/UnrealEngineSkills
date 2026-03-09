@@ -14,8 +14,10 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -45,7 +47,7 @@ except ImportError as exc:
 # ---------------------------------------------------------------------------
 SOURCE_EXTENSIONS = {".h", ".cpp", ".c", ".inl"}
 SOURCE_SUBDIRS = ("Public", "Private", "Classes")
-SIZE_DIFF_THRESHOLD = 0.10          # 10% size difference → modified
+SIZE_DIFF_THRESHOLD = 0.10          # 10% size difference → modified (fallback)
 TIER1_MODULES = {
     "Core", "CoreUObject", "Engine", "RHI", "RenderCore", "Renderer",
     "ApplicationCore", "SlateCore", "Slate", "InputCore",
@@ -57,6 +59,11 @@ CATEGORY_THRESHOLDS = {
     "major":     0.70,
     # > 0.70  → rewritten
 }
+
+HASH_BLOCK_SIZE = 65536
+MAX_SYMBOL_FILE_SIZE = 512 * 1024  # skip symbol extraction above this size
+MAX_CHANGED_FILES_PER_MODULE = 50  # JSON output truncation
+MAX_SYMBOLS_PER_FILE = 200         # cap symbol extraction per file
 
 
 # ---------------------------------------------------------------------------
@@ -104,15 +111,143 @@ def find_module_dirs(engine_root: Path) -> Dict[str, Path]:
 
 
 # ---------------------------------------------------------------------------
+# File hashing
+# ---------------------------------------------------------------------------
+
+def file_md5(path: Path) -> str:
+    """Return hex MD5 of a file, or '' on read error."""
+    h = hashlib.md5()
+    try:
+        with open(path, 'rb') as f:
+            while chunk := f.read(HASH_BLOCK_SIZE):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction
+# ---------------------------------------------------------------------------
+
+# Matches class/struct declarations: class Foo / struct Foo (optional API macro)
+_CLASS_RE = re.compile(r'^\s*(?:class|struct)\s+(?:\w+_API\s+)?(\w+)\s*')
+# Matches function definitions: return_type (Namespace::)FuncName(
+_FUNC_RE = re.compile(r'^\s*[\w\*&:<>\s]+\s+(\w+::)?(\w+)\s*\(')
+
+
+def extract_symbols_with_hashes(path: Path) -> Dict[str, str]:
+    """Return {symbol_name: body_md5} by brace-depth tracking.
+
+    Returns {} if the file is too large, unreadable, or has no symbols.
+    Caps output at MAX_SYMBOLS_PER_FILE entries.
+    """
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return {}
+
+    if size > MAX_SYMBOL_FILE_SIZE:
+        return {}
+
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+
+    lines = text.splitlines()
+    result: Dict[str, str] = {}
+    brace_depth = 0
+    current_symbol: Optional[str] = None
+    symbol_lines: List[str] = []
+    pending_symbol: Optional[str] = None  # matched but brace not yet seen
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Count braces in this line
+        open_count = line.count('{')
+        close_count = line.count('}')
+
+        if brace_depth == 0 and current_symbol is None:
+            # Skip preprocessor and pure comment lines
+            if stripped.startswith('#') or stripped.startswith('//'):
+                continue
+
+            # Try class/struct match
+            m_class = _CLASS_RE.match(line)
+            if m_class and '{' in line:
+                pending_symbol = m_class.group(1)
+            elif m_class:
+                pending_symbol = m_class.group(1)
+                # brace may come on a later line; handled below
+            else:
+                # Try function signature
+                m_func = _FUNC_RE.match(line)
+                if m_func:
+                    sym = m_func.group(2)
+                    if sym and '{' in line:
+                        pending_symbol = sym
+                    elif sym:
+                        pending_symbol = sym
+
+            if pending_symbol and open_count > 0:
+                current_symbol = pending_symbol
+                pending_symbol = None
+                symbol_lines = [line]
+                brace_depth += open_count
+                brace_depth -= close_count
+                continue
+
+        elif brace_depth == 0 and current_symbol is None and pending_symbol:
+            # We had a match last line; check if brace appears now
+            if '{' in line:
+                current_symbol = pending_symbol
+                pending_symbol = None
+                symbol_lines = [line]
+                brace_depth += open_count
+                brace_depth -= close_count
+                continue
+            else:
+                pending_symbol = None
+
+        if current_symbol is not None:
+            symbol_lines.append(line)
+            brace_depth += open_count
+            brace_depth -= close_count
+
+            if brace_depth <= 0:
+                brace_depth = 0
+                body = "\n".join(symbol_lines)
+                result[current_symbol] = hashlib.md5(
+                    body.encode("utf-8", errors="replace")
+                ).hexdigest()
+                current_symbol = None
+                symbol_lines = []
+
+                if len(result) >= MAX_SYMBOLS_PER_FILE:
+                    break
+        else:
+            # Not inside a symbol yet; update depth for any stray braces
+            brace_depth += open_count
+            brace_depth -= close_count
+            if brace_depth < 0:
+                brace_depth = 0
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # File scanning
 # ---------------------------------------------------------------------------
 
-def scan_source_files(module_path: Path) -> Dict[str, int]:
-    """Return {relative_path: file_size} for all source files in a module.
+def scan_source_files(module_path: Path) -> Dict[str, Tuple[int, str]]:
+    """Return {relative_path: (file_size, md5_hex)} for all source files.
 
     Only walks Public/, Private/, and Classes/ sub-directories.
+    On OSError, size=0 and md5=''.
     """
-    files: Dict[str, int] = {}
+    files: Dict[str, Tuple[int, str]] = {}
     for subdir in SOURCE_SUBDIRS:
         sub = module_path / subdir
         if not sub.is_dir():
@@ -121,45 +256,117 @@ def scan_source_files(module_path: Path) -> Dict[str, int]:
             if p.is_file() and p.suffix.lower() in SOURCE_EXTENSIONS:
                 rel = p.relative_to(module_path).as_posix()
                 try:
-                    files[rel] = p.stat().st_size
+                    size = p.stat().st_size
+                    md5 = file_md5(p)
                 except OSError:
-                    files[rel] = 0
+                    size = 0
+                    md5 = ""
+                files[rel] = (size, md5)
     return files
 
 
 def classify_file_changes(
-    src_files: Dict[str, int],
-    tgt_files: Dict[str, int],
-) -> Tuple[int, int, int, int]:
-    """Return (added, removed, modified, common_unchanged).
+    src_files: Dict[str, Tuple[int, str]],
+    tgt_files: Dict[str, Tuple[int, str]],
+    src_module_path: Path,
+    tgt_module_path: Path,
+) -> Tuple[int, int, int, int, List[Dict]]:
+    """Return (added, removed, modified, unchanged_count, changed_files_detail).
 
     added    — file in target but not source
     removed  — file in source but not target
-    modified — file in both but size differs by > SIZE_DIFF_THRESHOLD
-    common_unchanged — file in both, size similar
+    modified — file in both but md5 differs (falls back to size diff if both md5s empty)
+    unchanged_count — file in both, content identical
+    changed_files_detail — list of dicts describing each changed file
     """
     src_set = set(src_files)
     tgt_set = set(tgt_files)
 
-    added = len(tgt_set - src_set)
-    removed = len(src_set - tgt_set)
+    changed_files_detail: List[Dict] = []
 
+    # Added files
+    added_paths = sorted(tgt_set - src_set)
+    for rel in added_paths:
+        tgt_size, _ = tgt_files[rel]
+        tgt_syms = extract_symbols_with_hashes(tgt_module_path / rel)
+        changed_files_detail.append({
+            "path": rel,
+            "status": "added",
+            "src_size": 0,
+            "tgt_size": tgt_size,
+            "added_symbols": sorted(tgt_syms.keys()),
+            "removed_symbols": [],
+            "changed_symbols": [],
+        })
+
+    # Removed files
+    removed_paths = sorted(src_set - tgt_set)
+    for rel in removed_paths:
+        src_size, _ = src_files[rel]
+        src_syms = extract_symbols_with_hashes(src_module_path / rel)
+        changed_files_detail.append({
+            "path": rel,
+            "status": "removed",
+            "src_size": src_size,
+            "tgt_size": 0,
+            "added_symbols": [],
+            "removed_symbols": sorted(src_syms.keys()),
+            "changed_symbols": [],
+        })
+
+    # Common files — check for modifications
     modified = 0
-    common_unchanged = 0
-    for rel in src_set & tgt_set:
-        s_size = src_files[rel]
-        t_size = tgt_files[rel]
-        if s_size == 0 and t_size == 0:
-            common_unchanged += 1
-            continue
-        denom = max(s_size, t_size)
-        diff_ratio = abs(s_size - t_size) / denom if denom else 0.0
-        if diff_ratio > SIZE_DIFF_THRESHOLD:
-            modified += 1
-        else:
-            common_unchanged += 1
+    unchanged_count = 0
+    for rel in sorted(src_set & tgt_set):
+        src_size, src_md5 = src_files[rel]
+        tgt_size, tgt_md5 = tgt_files[rel]
 
-    return added, removed, modified, common_unchanged
+        if src_md5 and tgt_md5:
+            is_modified = src_md5 != tgt_md5
+        else:
+            # Fallback to size-based comparison when MD5 unavailable
+            if src_size == 0 and tgt_size == 0:
+                is_modified = False
+            else:
+                denom = max(src_size, tgt_size)
+                diff_ratio = abs(src_size - tgt_size) / denom if denom else 0.0
+                is_modified = diff_ratio > SIZE_DIFF_THRESHOLD
+
+        if not is_modified:
+            unchanged_count += 1
+            continue
+
+        modified += 1
+
+        # Symbol-level diff for modified files
+        src_syms = extract_symbols_with_hashes(src_module_path / rel)
+        tgt_syms = extract_symbols_with_hashes(tgt_module_path / rel)
+
+        if src_syms or tgt_syms:
+            src_sym_set = set(src_syms.keys())
+            tgt_sym_set = set(tgt_syms.keys())
+            added_syms = sorted(tgt_sym_set - src_sym_set)
+            removed_syms = sorted(src_sym_set - tgt_sym_set)
+            changed_syms = sorted(
+                s for s in src_sym_set & tgt_sym_set
+                if src_syms[s] != tgt_syms[s]
+            )
+        else:
+            added_syms = []
+            removed_syms = []
+            changed_syms = []
+
+        changed_files_detail.append({
+            "path": rel,
+            "status": "modified",
+            "src_size": src_size,
+            "tgt_size": tgt_size,
+            "added_symbols": added_syms,
+            "removed_symbols": removed_syms,
+            "changed_symbols": changed_syms,
+        })
+
+    return len(added_paths), len(removed_paths), modified, unchanged_count, changed_files_detail
 
 
 def compute_change_rate(
@@ -207,13 +414,15 @@ def classify_subsystem(
     tgt_module: Path,
 ) -> Dict:
     """Classify a single subsystem across source/target module dirs."""
-    src_files: Dict[str, int] = {}
-    tgt_files: Dict[str, int] = {}
+    src_files: Dict[str, Tuple[int, str]] = {}
+    tgt_files: Dict[str, Tuple[int, str]] = {}
 
     for subdir_name in SOURCE_SUBDIRS:
+        src_root = src_module / subdir_name / subsystem_name
+        tgt_root = tgt_module / subdir_name / subsystem_name
         for root, files_dict in [
-            (src_module / subdir_name / subsystem_name, src_files),
-            (tgt_module / subdir_name / subsystem_name, tgt_files),
+            (src_root, src_files),
+            (tgt_root, tgt_files),
         ]:
             if not root.is_dir():
                 continue
@@ -221,11 +430,20 @@ def classify_subsystem(
                 if p.is_file() and p.suffix.lower() in SOURCE_EXTENSIONS:
                     rel = p.relative_to(root).as_posix()
                     try:
-                        files_dict[rel] = p.stat().st_size
+                        size = p.stat().st_size
+                        md5 = file_md5(p)
                     except OSError:
-                        files_dict[rel] = 0
+                        size = 0
+                        md5 = ""
+                    files_dict[rel] = (size, md5)
 
-    added, removed, modified, _ = classify_file_changes(src_files, tgt_files)
+    # Use the subsystem dirs as module roots for symbol extraction
+    src_sub_root = src_module  # symbols extracted relative to module root
+    tgt_sub_root = tgt_module
+
+    added, removed, modified, _, changed_files = classify_file_changes(
+        src_files, tgt_files, src_sub_root, tgt_sub_root
+    )
     rate = compute_change_rate(added, removed, modified, len(src_files))
     cat = categorize(rate)
 
@@ -238,6 +456,7 @@ def classify_subsystem(
         "modified": modified,
         "change_rate": round(rate, 4),
         "category": cat,
+        "changed_files": changed_files[:20],
     }
 
 
@@ -272,6 +491,7 @@ def classify_module(
             "source_summary_exists": (src_kdir / "modules" / f"{name}.md").is_file(),
             "target_summary_exists": False,
             "subsystems": [],
+            "changed_files": [],
         }
 
     src_files = scan_source_files(src_path)
@@ -299,9 +519,12 @@ def classify_module(
             "source_summary_exists": src_summary,
             "target_summary_exists": tgt_summary,
             "subsystems": [],
+            "changed_files": [],
         }
 
-    added, removed, modified, _ = classify_file_changes(src_files, tgt_files)
+    added, removed, modified, _, changed_files_detail = classify_file_changes(
+        src_files, tgt_files, src_path, tgt_path
+    )
     rate = compute_change_rate(added, removed, modified, src_count)
 
     # Force rewritten if no source summary exists
@@ -333,6 +556,7 @@ def classify_module(
         "source_summary_exists": src_summary,
         "target_summary_exists": tgt_summary,
         "subsystems": subsystems,
+        "changed_files": changed_files_detail[:MAX_CHANGED_FILES_PER_MODULE],
     }
 
 
@@ -467,6 +691,7 @@ def main() -> None:
                 "source_summary_exists": False,
                 "target_summary_exists": (tgt_kdir / "modules" / f"{name}.md").is_file(),
                 "subsystems": [],
+                "changed_files": [],
             }
         else:
             result = classify_module(

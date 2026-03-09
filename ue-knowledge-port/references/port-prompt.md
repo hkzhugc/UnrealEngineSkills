@@ -30,23 +30,32 @@ See `Engine/.claude/skills/ue-knowledge-init/references/summary-generation-promp
 
 Use when `category == "unchanged"` (change_rate < 5%).
 No code reading needed — pure file copy with metadata update.
+Includes a lightweight verification step to catch stale summaries.
 
 ```
 Port the module summary for "{Name}" from source to target engine.
 
 Source summary: {source_knowledge_dir}/modules/{Name}.md
+Target module path: {target_path}
 Target write path: {target_knowledge_dir}/modules/{Name}.md
 
-Steps:
+Before copying:
 1. Read the source summary at {source_knowledge_dir}/modules/{Name}.md
-2. Replace any occurrences of the source engine path ({source_engine}) with
-   the target engine path ({target_engine}) in file references.
-3. Update "Last Updated" to {today}.
-4. Write the result to {target_knowledge_dir}/modules/{Name}.md
-   (create parent directories if needed).
+2. Note 2-3 key class names listed in the "Key Concepts" section
+3. Grep those class names in {target_path}/Public/ and {target_path}/Private/
+4. If ALL class names are found in the target → proceed to copy:
+   a. Replace any occurrences of the source engine path ({source_engine}) with
+      the target engine path ({target_engine}) in file references
+   b. Update "Last Updated" to {today}
+   c. Write the result to {target_knowledge_dir}/modules/{Name}.md
+      (create parent directories if needed)
+5. If ANY key class name is missing, or new classes appear that are absent from
+   the source summary → escalate: treat this module as Port-Minor instead and
+   follow the Port-Minor steps below
 
-Do NOT change any technical content — Purpose, Key Concepts, Entry Points,
-Architecture, or Modification Guide sections must remain identical.
+Do NOT change any technical content when copying — Purpose, Key Concepts,
+Entry Points, Architecture, and Modification Guide sections must remain
+identical to the source summary (only paths and date are updated).
 ```
 
 ### Port-Unchanged Batch Variant
@@ -63,15 +72,17 @@ Target engine path: {target_engine}
 Today's date: {today}
 
 Modules to port:
-{- Name1}
-{- Name2}
+{- Name1 | target: {target_path1}}
+{- Name2 | target: {target_path2}}
 ...
 
 For EACH module:
 1. Read {source_knowledge_dir}/modules/{Name}.md
-2. Replace source engine path with target engine path in any file references
-3. Update "Last Updated" to {today}
-4. Write to {target_knowledge_dir}/modules/{Name}.md
+2. Note 2-3 key class names from the "Key Concepts" section
+3. Grep those class names in {target_path}/Public/ and {target_path}/Private/
+4. If ALL found → replace source engine path with target engine path, update
+   "Last Updated" to {today}, write to {target_knowledge_dir}/modules/{Name}.md
+5. If ANY missing → mark that module for Port-Minor treatment and skip copying
 ```
 
 ---
@@ -79,7 +90,8 @@ For EACH module:
 ## Port-Minor Prompt
 
 Use when `category == "minor"` (change_rate 5–30%).
-Read source summary + scan changed files → edit affected sections only.
+Uses `changed_files` from the classify JSON to pinpoint exactly what changed,
+minimising unnecessary file reads.
 
 ```
 Update the module summary for "{Name}" to reflect minor changes in the target engine.
@@ -87,24 +99,36 @@ Update the module summary for "{Name}" to reflect minor changes in the target en
 Source summary: {source_knowledge_dir}/modules/{Name}.md
 Target module path: {target_path}
 Target write path: {target_knowledge_dir}/modules/{Name}.md
-Changed files (added/modified in target): {changed_files_list}
+Changed files (from classify JSON):
+{changed_files_json}
 
 Steps:
 1. Read the source summary: {source_knowledge_dir}/modules/{Name}.md
-2. For each file in the changed list (at most 3 files, first 200 lines each):
-   - Read the file header to understand what changed
-   - Note any new classes, removed APIs, or changed entry points
-3. Copy the source summary to {target_knowledge_dir}/modules/{Name}.md
-4. Edit only the sections that are affected by the changes:
-   - Purpose: update if the module's core role changed
-   - Key Concepts: add/remove classes that were added/removed
-   - Entry Points: update file paths if renamed; add new entry points
-   - Modification Guide: update if new extension points were added
-5. Update "Last Updated" to {today}
-6. Write the updated summary to {target_knowledge_dir}/modules/{Name}.md
+2. Process changed_files in priority order:
+   a. Files where "added_symbols" or "removed_symbols" is non-empty:
+      These represent confirmed API surface changes. Record every symbol name
+      listed — no file reading needed for these.
+   b. Files where "changed_symbols" is non-empty:
+      Grep each symbol name in {target_path}/Public/ and {target_path}/Private/,
+      then read 30 lines of context around each match to understand what changed.
+   c. Files with status "added":
+      Read the first 200 lines of {target_path}/{file.path} to understand new
+      classes or entry points introduced.
+3. Determine which summary sections are affected:
+   - Key Concepts: update if classes were added or removed
+   - Entry Points: update if new public functions appeared or were removed
+   - Architecture: update if structural relationships changed
+   - Modification Guide: update if extension points changed
+4. Copy the source summary to {target_knowledge_dir}/modules/{Name}.md
+5. Edit ONLY the affected sections identified in step 3
+6. Update "Last Updated" to {today}
+7. Write the updated summary to {target_knowledge_dir}/modules/{Name}.md
 
-Constraint: Keep unchanged sections verbatim. Only edit what the code diff
-actually warrants. Do not fabricate new content.
+Constraints:
+- Sections NOT touched by changed_files must remain verbatim from the source summary
+- Do not read files absent from changed_files unless a symbol grep returns no results
+- Do not fabricate content; all class names and function names must come from
+  files you actually read or from the changed_files symbol lists
 ```
 
 ### Port-Minor Batch Variant
@@ -119,12 +143,12 @@ Target knowledge dir: {target_knowledge_dir}
 Today's date: {today}
 
 Modules:
-- {Name1} | target: {target_path1} | changed files: {files1}
-- {Name2} | target: {target_path2} | changed files: {files2}
-- {Name3} | target: {target_path3} | changed files: {files3}
+- {Name1} | target: {target_path1} | changed_files: {changed_files_json1}
+- {Name2} | target: {target_path2} | changed_files: {changed_files_json2}
+- {Name3} | target: {target_path3} | changed_files: {changed_files_json3}
 
 For EACH module, follow the Port-Minor steps above.
-Process modules sequentially (read source summary → edit → write).
+Process modules sequentially (read source summary → analyse changed_files → edit → write).
 ```
 
 ---
@@ -132,12 +156,13 @@ Process modules sequentially (read source summary → edit → write).
 ## Port-Major Prompt
 
 Use when `category == "major"` (change_rate 30–70%).
-Source summary is context only — regenerate from target code.
+The source summary is used only as structural scaffolding; all technical content
+must come from the target codebase. `changed_files` drives the read order.
 
 ```
 Regenerate the module summary for "{Name}" for the target (modified) engine.
 
-Context (source summary — use for structure reference only, do not copy content):
+Source summary (structure reference only — do NOT copy technical content):
   {source_knowledge_dir}/modules/{Name}.md
 
 Target module:
@@ -147,22 +172,43 @@ Target module:
 - Public deps: {public_deps}
 - Private deps: {private_deps}
 
+Changed files (from classify JSON — drives reading priority):
+{changed_files_json}
+
 Target write path: {target_knowledge_dir}/modules/{Name}.md
 
 Steps:
-1. Read the source summary for structural context (section names, format).
-   Do NOT copy technical content — the module has changed significantly.
-2. Glob target Public/ headers: {target_path}/Public/**/*.h
-3. Read at most 3 important headers (first 200 lines each; prioritize
-   UCLASS/USTRUCT definitions or the main module header)
-4. Grep for IMPLEMENT_MODULE in {target_path}/Private/ to find the main .cpp
-5. Read the summary template:
-   Engine/.claude/skills/ue-knowledge-init/references/summary-template.md
-6. Generate a new summary describing the target engine's version of this module
-7. Update "Last Updated" to {today}
-8. Write to {target_knowledge_dir}/modules/{Name}.md
+1. Read the source summary for:
+   - Section structure (use the same section names and format)
+   - Subsystem names listed in the summary (verify each still exists in target)
+   Do NOT carry over any class names, function names, or file paths from the
+   source summary — the module has changed significantly.
 
-Quality: All class names and file paths must come from files you actually read.
+2. Read target code in this priority order:
+   a. Files from changed_files where "added_symbols" is non-empty — these
+      expose the new API surface; read the full file (up to 300 lines)
+   b. Files from changed_files where "changed_symbols" is non-empty — grep
+      each changed symbol in {target_path}, read 40 lines of context
+   c. Glob {target_path}/Public/**/*.h and pick at most 3 headers not already
+      read above (prefer files with UCLASS/USTRUCT or the main module header);
+      read first 200 lines each
+
+3. Grep for IMPLEMENT_MODULE in {target_path}/Private/ to confirm the module
+   entry point
+
+4. Read the summary template:
+   Engine/.claude/skills/ue-knowledge-init/references/summary-template.md
+
+5. Generate a new summary describing the target engine's version of this module.
+   All class names, function names, and file paths must come from target files
+   you actually read in steps 2–3.
+
+6. Update "Last Updated" to {today}
+
+7. Write to {target_knowledge_dir}/modules/{Name}.md
+
+Quality: never reference a symbol or path from the source summary unless you
+confirmed it exists in the target by reading target code.
 ```
 
 ### Port-Major Batch Variant
@@ -172,17 +218,18 @@ For up to 3 major modules per agent turn:
 ```
 Regenerate module summaries for these {N} significantly-changed modules.
 
-Source knowledge dir: {source_knowledge_dir} (context only)
+Source knowledge dir: {source_knowledge_dir} (structure reference only)
 Target knowledge dir: {target_knowledge_dir}
 Today's date: {today}
 
 Modules:
-- {Name1} | target: {target_path1} | type: {type1} | layer: {layer1}
-- {Name2} | target: {target_path2} | type: {type2} | layer: {layer2}
-- {Name3} | target: {target_path3} | type: {type3} | layer: {layer3}
+- {Name1} | target: {target_path1} | type: {type1} | layer: {layer1} | changed_files: {changed_files_json1}
+- {Name2} | target: {target_path2} | type: {type2} | layer: {layer2} | changed_files: {changed_files_json2}
+- {Name3} | target: {target_path3} | type: {type3} | layer: {layer3} | changed_files: {changed_files_json3}
 
 For EACH module, follow the Port-Major steps above.
-Read the source summary for context, then regenerate from target code.
+Read the source summary for structure only, then regenerate from target code
+using changed_files to prioritise which files to read.
 ```
 
 ---
@@ -198,6 +245,7 @@ category logic but scope to the subsystem directory:
 **Subsystem-Minor / Major**: Same as module variants but:
 - Read parent module summary first (once, reuse for all subsystems)
 - Scope file reads to `{target_path}/{subdir}/{SubsystemName}/`
+- Use `changed_files` from the subsystem's classify entry (truncated to 20)
 - Write to `{target_knowledge_dir}/modules/{ModuleName}/{SubsystemName}.md`
 - Use the subsystem template:
   `Engine/.claude/skills/ue-knowledge-init/references/subsystem-template.md`
