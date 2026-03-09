@@ -5,13 +5,13 @@
 > accordingly. Python scripts auto-detect the correct directory; set env var
 > `AGENT_DIR_NAME` to override.
 
-Prompt templates used by `ue-knowledge-port` Phase 2 to update module/subsystem
+Prompt templates used by `ue-knowledge-port` Phase 2 to update module/submodule
 summaries based on their classification category.
 
 ## How to Use
 
 1. Read the classification JSON produced by `port_classify.py`
-2. For each module (or subsystem), pick the template matching its `category`
+2. For each module (or submodule), pick the template matching its `category`
 3. Fill in `{placeholders}` with values from the JSON
 4. Append the **Common Rules** block from
    `ue-knowledge-init/references/summary-generation-prompt.md` verbatim
@@ -180,7 +180,7 @@ Target write path: {target_knowledge_dir}/modules/{Name}.md
 Steps:
 1. Read the source summary for:
    - Section structure (use the same section names and format)
-   - Subsystem names listed in the summary (verify each still exists in target)
+   - Submodule names listed in the summary (verify each still exists in target)
    Do NOT carry over any class names, function names, or file paths from the
    source summary — the module has changed significantly.
 
@@ -234,18 +234,18 @@ using changed_files to prioritise which files to read.
 
 ---
 
-## Subsystem Variants
+## Submodule Variants
 
-For each subsystem entry in the module's `subsystems` array, use the same
-category logic but scope to the subsystem directory:
+For each submodule entry in the module's `submodules` array, use the same
+category logic but scope to the submodule directory:
 
-**Subsystem-Unchanged**: Same as Port-Unchanged but with path
-  `modules/{ModuleName}/{SubsystemName}.md`
+**Submodule-Unchanged**: Same as Port-Unchanged but with path
+  `modules/{ModuleName}/{SubmoduleName}.md`
 
-**Subsystem-Minor / Major**: Same as module variants but:
-- Read parent module summary first (once, reuse for all subsystems)
-- Scope file reads to `{target_path}/{subdir}/{SubsystemName}/`
-- Use `changed_files` from the subsystem's classify entry (truncated to 20)
-- Write to `{target_knowledge_dir}/modules/{ModuleName}/{SubsystemName}.md`
-- Use the subsystem template:
-  `Engine/.claude/skills/ue-knowledge-init/references/subsystem-template.md`
+**Submodule-Minor / Major**: Same as module variants but:
+- Read parent module summary first (once, reuse for all submodules)
+- Scope file reads to `{target_path}/{subdir}/{SubmoduleName}/`
+- Use `changed_files` from the submodule's classify entry (truncated to 20)
+- Write to `{target_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md`
+- Use the submodule template:
+  `Engine/.claude/skills/ue-knowledge-init/references/submodule-template.md`

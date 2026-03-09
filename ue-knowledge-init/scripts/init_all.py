@@ -4,13 +4,13 @@ summary batch plan for the calling LLM agent to dispatch.
 
 Phases 1 & 3 are fully automated (no LLM). Phase 2 outputs a JSON
 batch plan that the LLM agent executes via sub-agents. Phase 2b
-generates subsystem summaries for large modules.
+generates submodule summaries for large modules.
 
 Usage:
     python init_all.py                    # run phases 1, 2, 2b & 3
     python init_all.py --phase 1          # only module graph
     python init_all.py --phase 2 --tier 1 # only plan tier-1 summaries
-    python init_all.py --phase 2b         # only plan subsystem summaries
+    python init_all.py --phase 2b         # only plan submodule summaries
     python init_all.py --phase 3          # only shader map
     python init_all.py --resume           # skip completed phases
 """
@@ -37,7 +37,7 @@ def phase_complete(engine_dir: Path, phase) -> bool:
         modules_dir = kn_dir / 'modules'
         if not modules_dir.is_dir():
             return False
-        # Complete if at least one module has a subsystem subdirectory with .md files
+        # Complete if at least one module has a submodule subdirectory with .md files
         for d in modules_dir.iterdir():
             if d.is_dir() and list(d.glob('*.md')):
                 return True
@@ -135,11 +135,11 @@ def main():
             results[phase] = 'plan-ready' if ok else 'FAILED'
 
         elif phase == '2b':
-            # Phase 2b: subsystem summaries for large modules
-            extra = ['--subsystems', '--auto', '--resume',
+            # Phase 2b: submodule summaries for large modules
+            extra = ['--submodules', '--auto', '--resume',
                      '--min-files', str(args.min_files)]
             extra.extend(['--batch-size', str(args.batch_size)])
-            print('  Phase 2b generates a subsystem batch plan (JSON on stdout).')
+            print('  Phase 2b generates a submodule batch plan (JSON on stdout).')
             print('  The LLM agent must dispatch sub-agents for each batch.')
             print('  ---')
             ok = run_script('generate_summaries.py', extra, engine_root)
@@ -159,7 +159,7 @@ def main():
         label = {
             1: 'Module graph',
             2: 'Summaries (batch plan)',
-            '2b': 'Subsystem summaries (batch plan)',
+            '2b': 'Submodule summaries (batch plan)',
             3: 'Shader map',
         }[phase]
         print(f'  Phase {phase} ({label}): {status}')

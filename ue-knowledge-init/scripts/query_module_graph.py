@@ -15,7 +15,7 @@ Usage:
     python query_module_graph.py tree Core --depth 2
     python query_module_graph.py stats
     python query_module_graph.py overview
-    python query_module_graph.py subsystems Renderer
+    python query_module_graph.py submodules Renderer
 """
 
 import argparse
@@ -199,49 +199,49 @@ def cmd_overview(modules: dict):
     print(json.dumps(result, indent=2))
 
 
-def cmd_subsystems(engine_root: Path, name: str):
-    """List subsystems for a module, with summary existence status."""
+def cmd_submodules(engine_root: Path, name: str):
+    """List submodules for a module, with summary existence status."""
     kn_dir = knowledge_dir(engine_root)
     index_path = kn_dir / 'subsystem_index.json'
     modules_dir = kn_dir / 'modules'
 
-    subsystem_info = []
+    submodule_info = []
 
     # Try subsystem_index.json first
     if index_path.exists():
         with open(index_path, 'r', encoding='utf-8') as f:
             index = json.load(f)
         module_entry = index.get('modules', {}).get(name, {})
-        subsystem_names = module_entry.get('subsystems', [])
+        submodule_names = module_entry.get('submodules', [])
 
-        for s_name in subsystem_names:
+        for s_name in submodule_names:
             summary_path = modules_dir / name / f'{s_name}.md'
-            subsystem_info.append({
+            submodule_info.append({
                 'name': s_name,
                 'summary_exists': summary_path.exists(),
             })
     else:
         # Fall back to checking filesystem for existing summaries
-        subsystem_dir = modules_dir / name
-        if subsystem_dir.is_dir():
-            for md_file in sorted(subsystem_dir.glob('*.md')):
-                subsystem_info.append({
+        submodule_dir = modules_dir / name
+        if submodule_dir.is_dir():
+            for md_file in sorted(submodule_dir.glob('*.md')):
+                submodule_info.append({
                     'name': md_file.stem,
                     'summary_exists': True,
                 })
 
-    if not subsystem_info and not index_path.exists():
+    if not submodule_info and not index_path.exists():
         result = {
             "module": name,
-            "error": "No subsystem_index.json found. Run: python detect_subsystems.py --auto --save-index",
-            "subsystems": [],
+            "error": "No subsystem_index.json found. Run: python detect_submodules.py --auto --save-index",
+            "submodules": [],
         }
     else:
         result = {
             "module": name,
-            "subsystems": subsystem_info,
-            "total": len(subsystem_info),
-            "summaries_existing": sum(1 for s in subsystem_info if s['summary_exists']),
+            "submodules": submodule_info,
+            "total": len(submodule_info),
+            "summaries_existing": sum(1 for s in submodule_info if s['summary_exists']),
         }
 
     print(json.dumps(result, indent=2))
@@ -277,8 +277,8 @@ def main():
     p_stats = sub.add_parser('stats', help='Graph statistics')
     p_overview = sub.add_parser('overview', help='Compact layer-by-layer overview')
 
-    p_subsystems = sub.add_parser('subsystems', help='List subsystems for a module')
-    p_subsystems.add_argument('name', help='Module name')
+    p_submodules = sub.add_parser('submodules', help='List submodules for a module')
+    p_submodules.add_argument('name', help='Module name')
 
     args = parser.parse_args()
     if not args.command:
@@ -287,9 +287,9 @@ def main():
 
     engine_root = Path(args.engine_root) if args.engine_root else find_engine_root()
 
-    # subsystems command doesn't need the module graph
-    if args.command == 'subsystems':
-        cmd_subsystems(engine_root, args.name)
+    # submodules command doesn't need the module graph
+    if args.command == 'submodules':
+        cmd_submodules(engine_root, args.name)
         return
 
     data = load_graph(engine_root)

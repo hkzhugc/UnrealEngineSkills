@@ -1,5 +1,5 @@
 {
-  "description": "Keyword-to-subsystem mapping for reader matching. Maps common terms to the module/subsystem that owns them. Used by ue-knowledge-reader to locate the right subsystem summary.",
+  "description": "Keyword-to-submodule mapping for reader matching. Maps common terms to the module/submodule that owns them. Used by ue-knowledge-reader to locate the right submodule summary.",
   "mappings": {
     "Renderer": {
       "PostProcess": ["bloom", "DOF", "depth of field", "tone map", "tonemapper", "AA", "anti-alias", "motion blur", "eye adaptation", "auto exposure", "post process", "screen space reflection", "SSR", "ambient occlusion", "SSAO", "color grading", "vignette", "lens flare"],

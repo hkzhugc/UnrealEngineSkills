@@ -386,12 +386,12 @@ def categorize(change_rate: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Subsystem detection (lightweight — subdirectory-based)
+# Submodule detection (lightweight — subdirectory-based)
 # ---------------------------------------------------------------------------
 
-def detect_subsystems(module_path: Path) -> List[str]:
-    """Return names of subdirectory-based subsystems (>=5 source files)."""
-    subsystems: List[str] = []
+def detect_submodules(module_path: Path) -> List[str]:
+    """Return names of subdirectory-based submodules (>=5 source files)."""
+    submodules: List[str] = []
     for subdir_name in SOURCE_SUBDIRS:
         base = module_path / subdir_name
         if not base.is_dir():
@@ -403,23 +403,23 @@ def detect_subsystems(module_path: Path) -> List[str]:
                 1 for p in candidate.rglob("*")
                 if p.is_file() and p.suffix.lower() in SOURCE_EXTENSIONS
             )
-            if count >= 5 and candidate.name not in subsystems:
-                subsystems.append(candidate.name)
-    return subsystems
+            if count >= 5 and candidate.name not in submodules:
+                submodules.append(candidate.name)
+    return submodules
 
 
-def classify_subsystem(
-    subsystem_name: str,
+def classify_submodule(
+    submodule_name: str,
     src_module: Path,
     tgt_module: Path,
 ) -> Dict:
-    """Classify a single subsystem across source/target module dirs."""
+    """Classify a single submodule across source/target module dirs."""
     src_files: Dict[str, Tuple[int, str]] = {}
     tgt_files: Dict[str, Tuple[int, str]] = {}
 
     for subdir_name in SOURCE_SUBDIRS:
-        src_root = src_module / subdir_name / subsystem_name
-        tgt_root = tgt_module / subdir_name / subsystem_name
+        src_root = src_module / subdir_name / submodule_name
+        tgt_root = tgt_module / subdir_name / submodule_name
         for root, module_root, files_dict in [
             (src_root, src_module, src_files),
             (tgt_root, tgt_module, tgt_files),
@@ -445,7 +445,7 @@ def classify_subsystem(
     cat = categorize(rate)
 
     return {
-        "name": subsystem_name,
+        "name": submodule_name,
         "source_file_count": len(src_files),
         "target_file_count": len(tgt_files),
         "added": added,
@@ -487,7 +487,7 @@ def classify_module(
             "category": "removed",
             "source_summary_exists": (src_kdir / "modules" / f"{name}.md").is_file(),
             "target_summary_exists": False,
-            "subsystems": [],
+            "submodules": [],
             "changed_files": [],
         }
 
@@ -515,7 +515,7 @@ def classify_module(
             "category": "new",
             "source_summary_exists": src_summary,
             "target_summary_exists": tgt_summary,
-            "subsystems": [],
+            "submodules": [],
             "changed_files": [],
         }
 
@@ -530,14 +530,14 @@ def classify_module(
     else:
         cat = categorize(rate)
 
-    # Subsystems (only for larger modules or when they exist in source)
-    subsystems: List[Dict] = []
+    # Submodules (only for larger modules or when they exist in source)
+    submodules: List[Dict] = []
     if src_count >= 50 or tgt_count >= 50:
-        sys_names = detect_subsystems(src_path)
-        tgt_sys_names = detect_subsystems(tgt_path)
+        sys_names = detect_submodules(src_path)
+        tgt_sys_names = detect_submodules(tgt_path)
         all_sys = sorted(set(sys_names) | set(tgt_sys_names))
         for sname in all_sys:
-            subsystems.append(classify_subsystem(sname, src_path, tgt_path))
+            submodules.append(classify_submodule(sname, src_path, tgt_path))
 
     return {
         "name": name,
@@ -552,7 +552,7 @@ def classify_module(
         "category": cat,
         "source_summary_exists": src_summary,
         "target_summary_exists": tgt_summary,
-        "subsystems": subsystems,
+        "submodules": submodules,
         "changed_files": changed_files_detail[:MAX_CHANGED_FILES_PER_MODULE],
     }
 
@@ -687,7 +687,7 @@ def main() -> None:
                 "category": "new",
                 "source_summary_exists": False,
                 "target_summary_exists": (tgt_kdir / "modules" / f"{name}.md").is_file(),
-                "subsystems": [],
+                "submodules": [],
                 "changed_files": [],
             }
         else:

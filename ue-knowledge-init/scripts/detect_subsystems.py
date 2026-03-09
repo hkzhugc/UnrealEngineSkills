@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Detect subsystem boundaries within large UE4 modules.
+"""Detect submodule boundaries within large UE4 modules.
 
 Uses two complementary methods:
   A) Subdirectory detection: qualifying subdirs in Private/, Public/, Classes/
   B) Filename prefix clustering: CamelCase prefix groups in flat directories
 
 Usage:
-    python detect_subsystems.py Renderer
-    python detect_subsystems.py Renderer,Engine,Core
-    python detect_subsystems.py --auto --min-files 100
-    python detect_subsystems.py Renderer --min-subdir 5 --min-prefix 6
-    python detect_subsystems.py --auto --save-index
+    python detect_submodules.py Renderer
+    python detect_submodules.py Renderer,Engine,Core
+    python detect_submodules.py --auto --min-files 100
+    python detect_submodules.py Renderer --min-subdir 5 --min-prefix 6
+    python detect_submodules.py --auto --save-index
 
-Output (stdout): JSON with detected subsystems per module.
+Output (stdout): JSON with detected submodules per module.
 """
 
 import argparse
@@ -33,7 +33,7 @@ PLATFORM_DIRS = {
     'PS4', 'XboxOne', 'Switch', 'Lumin', 'HoloLens',
 }
 
-# Minimum total files for a module to have subsystems detected
+# Minimum total files for a module to have submodules detected
 MIN_MODULE_FILES = 30
 
 
@@ -85,13 +85,13 @@ def extract_camel_prefix(stem: str) -> str:
     return tokens[0]
 
 
-def detect_subdirectory_subsystems(module_path: Path, min_subdir: int) -> list:
-    """Method A: Detect subsystems from subdirectories in source roots.
+def detect_subdirectory_submodules(module_path: Path, min_subdir: int) -> list:
+    """Method A: Detect submodules from subdirectories in source roots.
 
     Scans Private/, Public/, Classes/ for subdirectories with >= min_subdir
-    source files. Same-named dirs across roots merge into one subsystem.
+    source files. Same-named dirs across roots merge into one submodule.
     """
-    subsystems = {}  # name -> {dirs: [], file_count: 0, files: []}
+    submodules = {}  # name -> {dirs: [], file_count: 0, files: []}
 
     for root_name in SOURCE_ROOTS:
         root_dir = module_path / root_name
@@ -118,18 +118,18 @@ def detect_subdirectory_subsystems(module_path: Path, min_subdir: int) -> list:
                 continue
 
             rel_dir = f'{root_name}/{name}'
-            if name not in subsystems:
-                subsystems[name] = {
+            if name not in submodules:
+                submodules[name] = {
                     'dirs': [],
                     'file_count': 0,
                     'files': [],
                 }
-            subsystems[name]['dirs'].append(rel_dir)
-            subsystems[name]['file_count'] += fc
-            subsystems[name]['files'].extend(get_key_files(subdir, 3))
+            submodules[name]['dirs'].append(rel_dir)
+            submodules[name]['file_count'] += fc
+            submodules[name]['files'].extend(get_key_files(subdir, 3))
 
     result = []
-    for name, info in sorted(subsystems.items(), key=lambda x: -x[1]['file_count']):
+    for name, info in sorted(submodules.items(), key=lambda x: -x[1]['file_count']):
         key_files = sorted(set(
             str(f.relative_to(module_path)).replace('\\', '/')
             for f in info['files']
@@ -145,12 +145,12 @@ def detect_subdirectory_subsystems(module_path: Path, min_subdir: int) -> list:
     return result
 
 
-def detect_prefix_cluster_subsystems(module_path: Path, min_prefix: int,
+def detect_prefix_cluster_submodules(module_path: Path, min_prefix: int,
                                      subdir_names: set) -> list:
-    """Method B: Detect subsystems from filename prefix clustering.
+    """Method B: Detect submodules from filename prefix clustering.
 
     For files directly in Private/ (not in subdirectories), extract CamelCase
-    prefix and cluster. Clusters with >= min_prefix files become subsystems.
+    prefix and cluster. Clusters with >= min_prefix files become submodules.
 
     subdir_names: set of names already claimed by subdirectory detection,
     used for deduplication.
@@ -205,7 +205,7 @@ def detect_prefix_cluster_subsystems(module_path: Path, min_prefix: int,
     return result
 
 
-def detect_subsystems(module_path: Path, min_subdir: int = 5,
+def detect_submodules(module_path: Path, min_subdir: int = 5,
                       min_prefix: int = 6) -> dict:
     """Run both detection methods and merge results for a single module."""
     module_path = Path(module_path)
@@ -219,33 +219,33 @@ def detect_subsystems(module_path: Path, min_subdir: int = 5,
             'module_name': module_path.name,
             'module_path': str(module_path).replace('\\', '/'),
             'total_files': total_files,
-            'subsystems': [],
+            'submodules': [],
             'uncategorized_file_count': total_files,
-            'note': f'Module has < {MIN_MODULE_FILES} files, subsystem detection skipped',
+            'note': f'Module has < {MIN_MODULE_FILES} files, submodule detection skipped',
         }
 
     # Method A: subdirectory detection
-    subdir_subsystems = detect_subdirectory_subsystems(module_path, min_subdir)
-    subdir_names = {s['name'] for s in subdir_subsystems}
+    subdir_submodules = detect_subdirectory_submodules(module_path, min_subdir)
+    subdir_names = {s['name'] for s in subdir_submodules}
 
     # Method B: prefix clustering (excludes names already found by subdirs)
-    prefix_subsystems = detect_prefix_cluster_subsystems(
+    prefix_submodules = detect_prefix_cluster_submodules(
         module_path, min_prefix, subdir_names
     )
 
     # Merge: subdirectory wins over prefix cluster on name overlap (already handled)
-    all_subsystems = subdir_subsystems + prefix_subsystems
-    all_subsystems.sort(key=lambda s: -s['file_count'])
+    all_submodules = subdir_submodules + prefix_submodules
+    all_submodules.sort(key=lambda s: -s['file_count'])
 
     # Calculate uncategorized count
-    categorized = sum(s['file_count'] for s in all_subsystems)
+    categorized = sum(s['file_count'] for s in all_submodules)
     uncategorized = max(0, total_files - categorized)
 
     return {
         'module_name': module_path.name,
         'module_path': str(module_path).replace('\\', '/'),
         'total_files': total_files,
-        'subsystems': all_subsystems,
+        'submodules': all_submodules,
         'uncategorized_file_count': uncategorized,
     }
 
@@ -324,7 +324,7 @@ def find_large_modules(engine_root: Path, min_files: int,
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Detect subsystem boundaries within UE4 modules'
+        description='Detect submodule boundaries within UE4 modules'
     )
     parser.add_argument('modules', nargs='?', type=str,
                         help='Comma-separated module names (or use --auto)')
@@ -371,7 +371,7 @@ def main():
     # Run detection
     results = []
     for name, path in targets:
-        result = detect_subsystems(path, args.min_subdir, args.min_prefix)
+        result = detect_submodules(path, args.min_subdir, args.min_prefix)
         results.append(result)
 
     # Output
@@ -395,7 +395,7 @@ def main():
                 continue
             name = r['module_name']
             index['modules'][name] = {
-                'subsystems': [s['name'] for s in r.get('subsystems', [])],
+                'submodules': [s['name'] for s in r.get('submodules', [])],
                 'file_count': r.get('total_files', 0),
             }
 

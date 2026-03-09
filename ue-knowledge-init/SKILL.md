@@ -77,38 +77,38 @@ See [Sub-Agent Dispatch Pattern](#sub-agent-dispatch-pattern) above.
 **Output**: `Engine/.claude/knowledge/modules/{ModuleName}.md`
 **Template**: `references/summary-template.md`
 
-## Phase 2b: Subsystem Summaries (Sub-Agent Dispatch)
+## Phase 2b: Submodule Summaries (Sub-Agent Dispatch)
 
-Large modules (100+ files) have internal subsystems detected by `scripts/detect_subsystems.py`.
+Large modules (100+ files) have internal submodules detected by `scripts/detect_submodules.py`.
 
-### Generate the subsystem batch plan
+### Generate the submodule batch plan
 
 ```bash
-python Engine/.claude/skills/ue-knowledge-init/scripts/generate_summaries.py --subsystems --auto --min-files 100 --resume
+python Engine/.claude/skills/ue-knowledge-init/scripts/generate_summaries.py --submodules --auto --min-files 100 --resume
 # Or for a specific module:
-python Engine/.claude/skills/ue-knowledge-init/scripts/generate_summaries.py --subsystems --module Renderer --resume
+python Engine/.claude/skills/ue-knowledge-init/scripts/generate_summaries.py --submodules --module Renderer --resume
 ```
 
 Options: `--module Renderer`, `--auto --min-files 100`, `--only PostProcess,Mobile`, `--batch-size 4`, `--resume`
 
 ### Dispatch
 
-Use the **Batch-Subsystem Prompt** from `references/summary-generation-prompt.md`.
+Use the **Batch-Submodule Prompt** from `references/summary-generation-prompt.md`.
 See [Sub-Agent Dispatch Pattern](#sub-agent-dispatch-pattern) above.
 
-### Subsystem detection
+### Submodule detection
 
 Two methods: subdirectories (>=5 files) and filename prefix clusters (>=6 files).
 
 ```bash
-python Engine/.claude/skills/ue-knowledge-init/scripts/detect_subsystems.py Renderer
-python Engine/.claude/skills/ue-knowledge-init/scripts/detect_subsystems.py --auto --min-files 100 --save-index
+python Engine/.claude/skills/ue-knowledge-init/scripts/detect_submodules.py Renderer
+python Engine/.claude/skills/ue-knowledge-init/scripts/detect_submodules.py --auto --min-files 100 --save-index
 ```
 
 `--save-index` writes `Engine/.claude/knowledge/subsystem_index.json`.
 
-**Output**: `Engine/.claude/knowledge/modules/{ModuleName}/{SubsystemName}.md`
-**Template**: `references/subsystem-template.md`
+**Output**: `Engine/.claude/knowledge/modules/{ModuleName}/{SubmoduleName}.md`
+**Template**: `references/submodule-template.md`
 
 ## Phase 3: Shader Map (No LLM)
 
@@ -150,7 +150,7 @@ $QUERY path Engine/Source/Runtime/Renderer  # find module by path
 $QUERY tree RHI --depth 2       # dependency tree
 $QUERY stats                    # graph-wide statistics
 $QUERY overview                 # compact layer-by-layer view
-$QUERY subsystems Renderer      # list subsystems for a module
+$QUERY submodules Renderer      # list submodules for a module
 ```
 
 ## Output Structure

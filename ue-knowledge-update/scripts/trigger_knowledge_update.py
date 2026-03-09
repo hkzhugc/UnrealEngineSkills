@@ -41,12 +41,12 @@ SKIP_PATTERNS = [
     f"Engine/{agent_dir_name()}/knowledge/",  # Don't trigger on our own output
 ]
 
-# Cached subsystem index (loaded once on first use)
+# Cached submodule index (loaded once on first use)
 _subsystem_index = None
 
 
 def load_subsystem_index():
-    """Load subsystem_index.json for subsystem detection."""
+    """Load subsystem_index.json for submodule detection."""
     global _subsystem_index
     if _subsystem_index is not None:
         return _subsystem_index
@@ -95,10 +95,10 @@ def should_skip(filepath):
     return False
 
 
-def detect_subsystem(module_name, filepath, parts):
-    """Detect which subsystem a file belongs to, if any.
+def detect_submodule(module_name, filepath, parts):
+    """Detect which submodule a file belongs to, if any.
 
-    Returns subsystem name or None.
+    Returns submodule name or None.
     Detection methods:
     1. Subdirectory of Private/Public/Classes → dir name
     2. Filename prefix → known prefix cluster from subsystem_index.json
@@ -115,25 +115,25 @@ def detect_subsystem(module_name, filepath, parts):
     # Method 2: Prefix cluster from subsystem_index.json
     index = load_subsystem_index()
     module_entry = index.get('modules', {}).get(module_name, {})
-    known_subsystems = module_entry.get('subsystems', [])
+    known_submodules = module_entry.get('submodules', [])
 
-    if known_subsystems:
-        # Extract filename stem and match against known subsystem prefixes
+    if known_submodules:
+        # Extract filename stem and match against known submodule prefixes
         stem = Path(filepath).stem
         # Strip common UE prefixes (F, U, A, etc.)
         clean = stem
         if len(clean) > 1 and clean[0] in ('F', 'U', 'A', 'I', 'E', 'T') and len(clean) > 1 and clean[1].isupper():
             clean = clean[1:]
 
-        for subsystem in known_subsystems:
-            if clean.startswith(subsystem):
-                return subsystem
+        for submodule in known_submodules:
+            if clean.startswith(submodule):
+                return submodule
 
     return None
 
 
 def classify_file(filepath):
-    """Classify a changed file into module, change type, and subsystem."""
+    """Classify a changed file into module, change type, and submodule."""
     if should_skip(filepath):
         return None, None, None
 
@@ -157,23 +157,23 @@ def classify_file(filepath):
             if part == "Public" or part == "Classes":
                 if i >= 1:
                     module_name = parts[i - 1]
-                    subsystem = detect_subsystem(module_name, filepath, parts)
-                    return module_name, "api", subsystem
+                    submodule = detect_submodule(module_name, filepath, parts)
+                    return module_name, "api", submodule
         # Private header
         for i, part in enumerate(parts):
             if part == "Private":
                 if i >= 1:
                     module_name = parts[i - 1]
-                    subsystem = detect_subsystem(module_name, filepath, parts)
-                    return module_name, "implementation", subsystem
+                    submodule = detect_submodule(module_name, filepath, parts)
+                    return module_name, "implementation", submodule
 
     if filepath.endswith((".cpp", ".c")):
         for i, part in enumerate(parts):
             if part in ("Private", "Public"):
                 if i >= 1:
                     module_name = parts[i - 1]
-                    subsystem = detect_subsystem(module_name, filepath, parts)
-                    return module_name, "implementation", subsystem
+                    submodule = detect_submodule(module_name, filepath, parts)
+                    return module_name, "implementation", submodule
 
     # Fallback: try to extract module from Source/<Type>/<Module>/ pattern
     for i, part in enumerate(parts):
@@ -189,22 +189,22 @@ def classify_file(filepath):
 
 def analyze_changes(changed_files):
     """Analyze all changed files and group by module."""
-    modules = {}  # module_name → {'change_types': set, 'subsystems': dict}
+    modules = {}  # module_name → {'change_types': set, 'submodules': dict}
     build_cs_changed = False
     shader_changed = False
 
     for f in changed_files:
         if not f.strip():
             continue
-        module, change_type, subsystem = classify_file(f)
+        module, change_type, submodule = classify_file(f)
         if module and change_type:
             if module not in modules:
-                modules[module] = {'change_types': set(), 'subsystems': {}}
+                modules[module] = {'change_types': set(), 'submodules': {}}
             modules[module]['change_types'].add(change_type)
-            if subsystem:
-                if subsystem not in modules[module]['subsystems']:
-                    modules[module]['subsystems'][subsystem] = set()
-                modules[module]['subsystems'][subsystem].add(change_type)
+            if submodule:
+                if submodule not in modules[module]['submodules']:
+                    modules[module]['submodules'][submodule] = set()
+                modules[module]['submodules'][submodule].add(change_type)
             if change_type == "dependency":
                 build_cs_changed = True
             if change_type == "shader":
@@ -225,13 +225,13 @@ def build_prompt(modules, build_cs_changed, shader_changed, commit_hash, commit_
 
     for module, info in sorted(modules.items()):
         types_str = ", ".join(sorted(info['change_types']))
-        subsystems = info.get('subsystems', {})
-        if subsystems:
+        submodules = info.get('submodules', {})
+        if submodules:
             sub_parts = []
-            for sub_name, sub_types in sorted(subsystems.items()):
+            for sub_name, sub_types in sorted(submodules.items()):
                 sub_parts.append(f"{sub_name}: {', '.join(sorted(sub_types))}")
             sub_str = "; ".join(sub_parts)
-            lines.append(f"  - {module}: {types_str} (subsystems: {sub_str})")
+            lines.append(f"  - {module}: {types_str} (submodules: {sub_str})")
         else:
             lines.append(f"  - {module}: {types_str}")
 
@@ -316,11 +316,11 @@ def main():
 
     print(f"[knowledge-update] Commit {commit_hash}: {commit_msg}")
     print(f"[knowledge-update] Affected modules: {', '.join(sorted(modules.keys()))}")
-    # Report subsystem detections
+    # Report submodule detections
     for mod_name, mod_info in sorted(modules.items()):
-        subs = mod_info.get('subsystems', {})
+        subs = mod_info.get('submodules', {})
         if subs:
-            print(f"[knowledge-update]   {mod_name} subsystems: {', '.join(sorted(subs.keys()))}")
+            print(f"[knowledge-update]   {mod_name} submodules: {', '.join(sorted(subs.keys()))}")
     print(f"[knowledge-update] Build.cs changed: {build_cs_changed}")
     print(f"[knowledge-update] Shaders changed: {shader_changed}")
 

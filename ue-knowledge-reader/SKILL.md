@@ -7,7 +7,7 @@ description: >
   or when the user asks about UE architecture. Also use when the user opens an
   engine source file and needs context about which module it belongs to, what that
   module does, and how it connects to other modules. Activate for any question
-  involving UE module dependencies, rendering pipeline, engine subsystems, or
+  involving UE module dependencies, rendering pipeline, engine submodules, or
   "how does X work in UE".
 allowed-tools: Read Write Bash(python*) Glob Grep Task
 ---
@@ -28,12 +28,12 @@ Use it to provide informed, accurate context when working with Unreal Engine cod
 Engine/.claude/knowledge/
 ├── module_graph.json      # Module dependency graph (~1274 modules, ~727KB)
 ├── shader_map.json        # .usf/.ush ↔ C++ mappings
-├── subsystem_index.json   # Subsystem detection index (optional)
+├── subsystem_index.json   # Submodule detection index (optional)
 ├── changelog.md           # Update history
 └── modules/
     ├── Core.md            # Per-module summaries
     ├── Renderer.md
-    ├── Renderer/           # Subsystem summaries (for large modules)
+    ├── Renderer/           # Submodule summaries (for large modules)
     │   ├── PostProcess.md
     │   ├── Mobile.md
     │   └── ...
@@ -136,29 +136,29 @@ Shader impact: MobileBasePassVertexShader.usf (check shader_map.json)
 
 ### When a question targets a specific area of a large module
 
-Large modules (Renderer, Engine, Core, UnrealEd) have optional **subsystem summaries**
-at `modules/{Module}/{Subsystem}.md` (30-80 lines each). Use these for targeted questions.
+Large modules (Renderer, Engine, Core, UnrealEd) have optional **submodule summaries**
+at `modules/{Module}/{Submodule}.md` (30-80 lines each). Use these for targeted questions.
 
 1. **Identify parent module** from the question or file path
-2. **Check for subsystem summaries**: `Glob modules/{Module}/*.md`
-3. **Match the relevant subsystem** via one of these methods:
-   - **Keyword match**: question contains subsystem name (case-insensitive)
-     - "mobile base pass" → Module=Renderer, Subsystem=Mobile
-   - **File path match**: user's open file belongs to a subsystem's source dirs
-     - `Renderer/Private/PostProcess/PostProcessBokehDOF.cpp` → Subsystem=PostProcess
-   - **Semantic keywords**: consult `Engine/.claude/skills/ue-knowledge-reader/references/subsystem-keywords.json`
+2. **Check for submodule summaries**: `Glob modules/{Module}/*.md`
+3. **Match the relevant submodule** via one of these methods:
+   - **Keyword match**: question contains submodule name (case-insensitive)
+     - "mobile base pass" → Module=Renderer, Submodule=Mobile
+   - **File path match**: user's open file belongs to a submodule's source dirs
+     - `Renderer/Private/PostProcess/PostProcessBokehDOF.cpp` → Submodule=PostProcess
+   - **Semantic keywords**: consult `Engine/.claude/skills/ue-knowledge-reader/references/submodule-keywords.json`
      - "bloom" → Renderer/PostProcess
      - "DXR" → Renderer/RayTracing
      - "montage" → Engine/Animation
-4. **Load the subsystem summary** (+ optionally the top-level module summary for broader context)
-5. If no subsystem summary exists, **generate on-demand** via sub-agent (see below)
+4. **Load the submodule summary** (+ optionally the top-level module summary for broader context)
+5. If no submodule summary exists, **generate on-demand** via sub-agent (see below)
 
-**Query subsystems**: `$QUERY subsystems Renderer` — lists detected subsystems and whether summaries exist.
+**Query submodules**: `$QUERY submodules Renderer` — lists detected submodules and whether summaries exist.
 
-#### Context limits for subsystem loading
-- Load **at most 2 subsystem summaries** per question
-- Subsystem (30-80 lines) + top-level (~100 lines) = ~180 lines budget max
-- Prefer subsystem summary over full module summary for targeted questions
+#### Context limits for submodule loading
+- Load **at most 2 submodule summaries** per question
+- Submodule (30-80 lines) + top-level (~100 lines) = ~180 lines budget max
+- Prefer submodule summary over full module summary for targeted questions
 
 ## Response Format
 
@@ -193,7 +193,7 @@ before the consumers.
 
 - If `module_graph.json` doesn't exist: tell the user to run `/ue-knowledge-init`
   and fall back to Glob/Grep-based exploration
-- If a module's or subsystem's summary doesn't exist: **generate on demand** (see below)
+- If a module's or submodule's summary doesn't exist: **generate on demand** (see below)
 - If shader_map.json doesn't exist: grep for shader references manually
 - Never refuse to help just because the knowledge graph is incomplete.
 
@@ -204,9 +204,9 @@ When a summary is needed but the `.md` file doesn't exist:
 1. **Module summary** (`modules/{Name}.md` missing):
    - Query: `$QUERY info {Name}`
    - Prompt: use "Single-Module Prompt" from `references/summary-generation-prompt.md`
-2. **Subsystem summary** (`modules/{Module}/{Subsystem}.md` missing):
-   - Query: `$QUERY subsystems {Module}`
-   - Prompt: use "Single-Subsystem Prompt" from `references/summary-generation-prompt.md`
+2. **Submodule summary** (`modules/{Module}/{Submodule}.md` missing):
+   - Query: `$QUERY submodules {Module}`
+   - Prompt: use "Single-Submodule Prompt" from `references/summary-generation-prompt.md`
 
 In both cases: fill in `{placeholders}`, launch a **sub-agent** (Task tool),
 then read the generated summary and continue.

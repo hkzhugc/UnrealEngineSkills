@@ -10,8 +10,8 @@ and `ue-knowledge-update` when generating summaries via sub-agents.
 
 ## How to Use
 
-1. Query module/subsystem info (see each prompt below)
-2. Pick the matching prompt template (Single-Module / Batch / Single-Subsystem / Batch-Subsystem)
+1. Query module/submodule info (see each prompt below)
+2. Pick the matching prompt template (Single-Module / Batch / Single-Submodule / Batch-Submodule)
 3. Fill in `{placeholders}` with actual values
 4. Append the **Common Rules** section verbatim to the end
 5. Launch a sub-agent (Task tool) with the filled prompt
@@ -37,7 +37,7 @@ Quality rules:
 ```
 
 Additional rules **for module summaries**: 60-150 lines total.
-Additional rules **for subsystem summaries**: 30-80 lines total; "Internal Architecture" describes how pieces connect within the subsystem; Purpose is scoped to the subsystem, not the whole module.
+Additional rules **for submodule summaries**: 30-80 lines total; "Internal Architecture" describes how pieces connect within the submodule; Purpose is scoped to the submodule, not the whole module.
 
 ---
 
@@ -81,16 +81,16 @@ For EACH module, follow the same steps as Single-Module above.
 Write each to {modules_dir}/{Name}.md.
 ```
 
-## Single-Subsystem Prompt
+## Single-Submodule Prompt
 
-Use for **one** subsystem (on-demand from reader/update):
+Use for **one** submodule (on-demand from reader/update):
 
 ```
-Generate a subsystem summary for "{SubsystemName}" within the UE4.26 module "{ModuleName}".
+Generate a submodule summary for "{SubmoduleName}" within the UE4.26 module "{ModuleName}".
 
 Parent module summary: {modules_dir}/{ModuleName}.md (read it first for context)
 
-Subsystem info:
+Submodule info:
 - Detection method: {detection}
 - File count: {file_count}
 - Source dirs: {source_dirs}
@@ -98,32 +98,32 @@ Subsystem info:
 
 Steps:
 1. Read the parent module summary: Engine/.claude/knowledge/modules/{ModuleName}.md
-2. Glob the subsystem's files: {module_path}/{source_dirs}/**/*.h and **/*.cpp
+2. Glob the submodule's files: {module_path}/{source_dirs}/**/*.h and **/*.cpp
 3. Read at most 3 important headers (prioritize UCLASS/USTRUCT or main header)
-4. Read the subsystem template: Engine/.claude/skills/ue-knowledge-init/references/subsystem-template.md
+4. Read the submodule template: Engine/.claude/skills/ue-knowledge-init/references/submodule-template.md
 5. Generate the summary following that template
-6. Write it to Engine/.claude/knowledge/modules/{ModuleName}/{SubsystemName}.md
+6. Write it to Engine/.claude/knowledge/modules/{ModuleName}/{SubmoduleName}.md
 ```
 
-## Batch-Subsystem Prompt
+## Batch-Submodule Prompt
 
-Use for **multiple** subsystems of one parent module (init Phase 2b):
+Use for **multiple** submodules of one parent module (init Phase 2b):
 
 ```
-Generate subsystem summaries for these {N} subsystems of the UE4.26 module "{ModuleName}".
+Generate submodule summaries for these {N} submodules of the UE4.26 module "{ModuleName}".
 
 Parent module:
 - Name: {ModuleName}
 - Path: {module_path}
 - Summary: {modules_dir}/{ModuleName}.md (read it ONCE, reuse for all)
 
-Subsystems to process:
-- {SubsystemName} (detection: {detection}, files: {file_count})
+Submodules to process:
+- {SubmoduleName} (detection: {detection}, files: {file_count})
   Source dirs: {source_dirs}
   Key files: {key_files}
-[repeat for each subsystem in batch]
+[repeat for each submodule in batch]
 
-For EACH subsystem, follow the same steps as Single-Subsystem above.
-Read the parent module summary ONCE, reuse for all subsystems.
-Write each to {modules_dir}/{ModuleName}/{SubsystemName}.md.
+For EACH submodule, follow the same steps as Single-Submodule above.
+Read the parent module summary ONCE, reuse for all submodules.
+Write each to {modules_dir}/{ModuleName}/{SubmoduleName}.md.
 ```

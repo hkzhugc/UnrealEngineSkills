@@ -56,7 +56,7 @@ Quick reference for the structure of `Engine/.claude/knowledge/module_graph.json
 | 1 | CoreUObject, Json | Depends only on Layer 0 |
 | 2 | ApplicationCore, RHI, SlateCore | Platform & rendering foundation |
 | 3 | Slate, InputCore, Engine | Major frameworks |
-| 4 | Renderer, NavigationSystem, AIModule | Subsystems |
+| 4 | Renderer, NavigationSystem, AIModule | Submodules |
 | 5 | UnrealEd, Kismet, BlueprintGraph | Editor tools |
 | 6+ | Game-specific plugins | Project-level |
 

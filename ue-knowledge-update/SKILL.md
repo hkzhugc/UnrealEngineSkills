@@ -77,22 +77,22 @@ on a 27K-line file.
 
 For each affected module, determine what needs updating:
 
-### Subsystem-aware updates
+### Submodule-aware updates
 
-When changed files belong to a subsystem that has a summary (`modules/{Module}/{Subsystem}.md`):
+When changed files belong to a submodule that has a summary (`modules/{Module}/{Submodule}.md`):
 
-1. **Detect subsystem** from file path:
-   - Subdirectory of `Private/` or `Classes/` → directory name is the subsystem
+1. **Detect submodule** from file path:
+   - Subdirectory of `Private/` or `Classes/` → directory name is the submodule
    - File in flat `Private/` → filename prefix → check `subsystem_index.json` for known cluster
-2. **Update the subsystem summary** using the same minimal/moderate/full rules below
-3. If a subsystem summary doesn't exist but the change is significant (new class, API change),
-   generate it on-demand using the single-subsystem prompt from
+2. **Update the submodule summary** using the same minimal/moderate/full rules below
+3. If a submodule summary doesn't exist but the change is significant (new class, API change),
+   generate it on-demand using the single-submodule prompt from
    `Engine/.claude/skills/ue-knowledge-init/references/summary-generation-prompt.md`
 4. **Always update the parent module's "Last Updated"** section too
 
-Query available subsystems:
+Query available submodules:
 ```bash
-$QUERY subsystems Renderer
+$QUERY submodules Renderer
 ```
 
 ### Minimal update (implementation changes only)

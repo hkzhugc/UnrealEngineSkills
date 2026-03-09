@@ -1,7 +1,7 @@
 ---
 name: ue-knowledge-port
 description: >
-  Port the Unreal Engine knowledge graph (module summaries + subsystem summaries)
+  Port the Unreal Engine knowledge graph (module summaries + submodule summaries)
   from an original engine build to a heavily-modified fork. Uses file-structure
   comparison (not git diff) to compute per-module change rates, classifies each
   module into unchanged/minor/major/rewritten/new/removed, then dispatches
@@ -111,7 +111,7 @@ python ... > port_plan.json
       "category": "unchanged",
       "source_summary_exists": true,
       "target_summary_exists": false,
-      "subsystems": [
+      "submodules": [
         { "name": "Containers", "category": "unchanged", "change_rate": 0.0 },
         { "name": "Math", "category": "minor", "change_rate": 0.08 }
       ]
@@ -141,25 +141,25 @@ For `rewritten` / `new`, use the **Single-Module Prompt** (or Batch-Module Promp
 from `Engine/.claude/skills/ue-knowledge-init/references/summary-generation-prompt.md`,
 writing to the **target** knowledge directory.
 
-### Subsystem handling
+### Submodule handling
 
 **REQUIRED** — after every module's top-level summary is written, you MUST also
-process its subsystems. Do not proceed to the next module until all subsystems of
+process its submodules. Do not proceed to the next module until all submodules of
 the current module are done.
 
-For each module entry whose `subsystems` array is non-empty:
+For each module entry whose `submodules` array is non-empty:
 
-1. Collect all subsystem entries from `module.subsystems`
+1. Collect all submodule entries from `module.submodules`
 2. Group them into batches of up to 4
-3. For each batch, dispatch a sub-agent using the **Subsystem Variants** section
+3. For each batch, dispatch a sub-agent using the **Submodule Variants** section
    of `port-prompt.md`, with:
    - `{ModuleName}` = the parent module name
-   - `{SubsystemName}` = the subsystem name
-   - `{changed_files_json}` = the subsystem's own `changed_files` array
-   - Write path: `{target_knowledge_dir}/modules/{ModuleName}/{SubsystemName}.md`
+   - `{SubmoduleName}` = the submodule name
+   - `{changed_files_json}` = the submodule's own `changed_files` array
+   - Write path: `{target_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md`
 4. Verify each `.md` file exists before dispatching the next batch
 
-If a module has zero subsystems (`subsystems: []`), skip this step and move on.
+If a module has zero submodules (`submodules: []`), skip this step and move on.
 
 ### Processing order
 
@@ -175,8 +175,8 @@ For each module, the mandatory execution sequence is:
 ```
 1. Dispatch module top-level summary sub-agent
 2. Verify {target_knowledge_dir}/modules/{Name}.md was written
-3. For each subsystem batch → dispatch subsystem sub-agent (see Subsystem handling)
-4. Verify each subsystem .md was written
+3. For each submodule batch → dispatch submodule sub-agent (see Submodule handling)
+4. Verify each submodule .md was written
 5. Move to next module
 ```
 Do NOT skip step 3 even if the module category is `unchanged`.
