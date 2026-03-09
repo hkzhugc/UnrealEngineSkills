@@ -629,18 +629,28 @@ def main() -> None:
     args = parser.parse_args()
 
     source_root = Path(args.source).resolve()
+    # Auto-correct: if passed .../Engine instead of the repo root, step up one level
+    if not (source_root / "Engine" / "Source").is_dir() and (source_root / "Source").is_dir():
+        source_root = source_root.parent
     if not (source_root / "Engine" / "Source").is_dir():
         sys.exit(f"ERROR: Source engine not found at {source_root}\n"
-                 f"  Expected Engine/Source/ to exist.")
+                 f"  Expected Engine/Source/ to exist.\n"
+                 f"  Pass the engine ROOT directory (the one containing the Engine/ folder),\n"
+                 f"  not the Engine/ subdirectory itself.")
 
     if args.target:
         target_root = Path(args.target).resolve()
+        # Auto-correct: same check for target
+        if not (target_root / "Engine" / "Source").is_dir() and (target_root / "Source").is_dir():
+            target_root = target_root.parent
     else:
         target_root = find_engine_root()
 
     if not (target_root / "Engine" / "Source").is_dir():
         sys.exit(f"ERROR: Target engine not found at {target_root}\n"
-                 f"  Expected Engine/Source/ to exist.")
+                 f"  Expected Engine/Source/ to exist.\n"
+                 f"  Pass the engine ROOT directory (the one containing the Engine/ folder),\n"
+                 f"  not the Engine/ subdirectory itself.")
 
     # Resolve agent dirs
     _src_agent = args.source_agent_dir  # may be None → auto-scan in helper

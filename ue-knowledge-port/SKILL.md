@@ -65,6 +65,11 @@ python Engine/.claude/skills/ue-knowledge-port/scripts/port_classify.py \
   --target-agent-dir .codebuddy
 ```
 
+**`--source` / `--target`**: Must be the engine **root** directory — the one that
+*contains* the `Engine/` folder (e.g. `D:/UE4.26/UnrealEngine`), NOT the
+`Engine/` subdirectory itself. The script auto-corrects if you accidentally pass
+the `Engine/` subdirectory, but passing the root is the correct form.
+
 **Source agent dir**: auto-scanned (looks for hidden dir with `knowledge/` under
 `{source}/Engine/`); override with `--source-agent-dir`.
 
