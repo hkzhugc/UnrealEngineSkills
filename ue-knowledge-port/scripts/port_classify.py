@@ -445,25 +445,29 @@ def main() -> None:
         source_root, target_root, args.tier, modules_filter
     )
 
+    src_modules_map = find_module_dirs(source_root)
+
     module_results: List[Dict] = []
     for name, src_path, tgt_path in entries:
-        is_new = (src_path == tgt_path) and not (source_root / "Engine" / "Source").is_dir()
-        # Detect true new modules: src_path came from tgt because source had no entry
-        src_modules_map = find_module_dirs(source_root)
         if name not in src_modules_map:
-            # New module: only in target
-            result = classify_module(
-                name,
-                tgt_path,          # use tgt as src placeholder
-                tgt_path,
-                src_kdir,
-                tgt_kdir,
-                source_root,
-                target_root,
-            )
-            result["source_path"] = None
-            result["category"] = "new"
-            result["source_file_count"] = 0
+            # New module: only exists in target — build entry directly
+            tgt_files = scan_source_files(tgt_path) if tgt_path else {}
+            tgt_count = len(tgt_files)
+            result = {
+                "name": name,
+                "source_path": None,
+                "target_path": tgt_path.relative_to(target_root).as_posix() if tgt_path else None,
+                "source_file_count": 0,
+                "target_file_count": tgt_count,
+                "added": tgt_count,
+                "removed": 0,
+                "modified": 0,
+                "change_rate": 1.0,
+                "category": "new",
+                "source_summary_exists": False,
+                "target_summary_exists": (tgt_kdir / "modules" / f"{name}.md").is_file(),
+                "subsystems": [],
+            }
         else:
             result = classify_module(
                 name,
