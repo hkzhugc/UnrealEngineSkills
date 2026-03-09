@@ -28,7 +28,7 @@ Use it to provide informed, accurate context when working with Unreal Engine cod
 Engine/.claude/knowledge/
 ├── module_graph.json      # Module dependency graph (~1274 modules, ~727KB)
 ├── shader_map.json        # .usf/.ush ↔ C++ mappings
-├── subsystem_index.json   # Submodule detection index (optional)
+├── submodule_index.json   # Submodule detection index (optional)
 ├── changelog.md           # Update history
 └── modules/
     ├── Core.md            # Per-module summaries

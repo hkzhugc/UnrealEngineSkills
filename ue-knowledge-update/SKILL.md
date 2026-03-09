@@ -83,7 +83,7 @@ When changed files belong to a submodule that has a summary (`modules/{Module}/{
 
 1. **Detect submodule** from file path:
    - Subdirectory of `Private/` or `Classes/` → directory name is the submodule
-   - File in flat `Private/` → filename prefix → check `subsystem_index.json` for known cluster
+   - File in flat `Private/` → filename prefix → check `submodule_index.json` for known cluster
 2. **Update the submodule summary** using the same minimal/moderate/full rules below
 3. If a submodule summary doesn't exist but the change is significant (new class, API change),
    generate it on-demand using the single-submodule prompt from

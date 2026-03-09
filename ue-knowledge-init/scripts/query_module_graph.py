@@ -202,12 +202,12 @@ def cmd_overview(modules: dict):
 def cmd_submodules(engine_root: Path, name: str):
     """List submodules for a module, with summary existence status."""
     kn_dir = knowledge_dir(engine_root)
-    index_path = kn_dir / 'subsystem_index.json'
+    index_path = kn_dir / 'submodule_index.json'
     modules_dir = kn_dir / 'modules'
 
     submodule_info = []
 
-    # Try subsystem_index.json first
+    # Try submodule_index.json first
     if index_path.exists():
         with open(index_path, 'r', encoding='utf-8') as f:
             index = json.load(f)
@@ -233,7 +233,7 @@ def cmd_submodules(engine_root: Path, name: str):
     if not submodule_info and not index_path.exists():
         result = {
             "module": name,
-            "error": "No subsystem_index.json found. Run: python detect_submodules.py --auto --save-index",
+            "error": "No submodule_index.json found. Run: python detect_submodules.py --auto --save-index",
             "submodules": [],
         }
     else:

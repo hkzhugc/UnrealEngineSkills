@@ -105,7 +105,7 @@ python Engine/.claude/skills/ue-knowledge-init/scripts/detect_submodules.py Rend
 python Engine/.claude/skills/ue-knowledge-init/scripts/detect_submodules.py --auto --min-files 100 --save-index
 ```
 
-`--save-index` writes `Engine/.claude/knowledge/subsystem_index.json`.
+`--save-index` writes `Engine/.claude/knowledge/submodule_index.json`.
 
 **Output**: `Engine/.claude/knowledge/modules/{ModuleName}/{SubmoduleName}.md`
 **Template**: `references/submodule-template.md`
@@ -159,7 +159,7 @@ $QUERY submodules Renderer      # list submodules for a module
 Engine/.claude/knowledge/
 ├── module_graph.json      ← Phase 1
 ├── shader_map.json        ← Phase 3
-├── subsystem_index.json   ← Phase 2b (optional, from --save-index)
+├── submodule_index.json   ← Phase 2b (optional, from --save-index)
 ├── changelog.md           ← Created by ue-knowledge-update
 └── modules/
     ├── Core.md            ← Phase 2

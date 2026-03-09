@@ -339,7 +339,7 @@ def main():
     parser.add_argument('--engine-root', type=str,
                         help='Path to engine root')
     parser.add_argument('--save-index', action='store_true',
-                        help='Write subsystem_index.json to knowledge dir')
+                        help='Write submodule_index.json to knowledge dir')
     args = parser.parse_args()
 
     if not args.modules and not args.auto:
@@ -401,7 +401,7 @@ def main():
 
         kn_dir = knowledge_dir(engine_root)
         kn_dir.mkdir(parents=True, exist_ok=True)
-        index_path = kn_dir / 'subsystem_index.json'
+        index_path = kn_dir / 'submodule_index.json'
         with open(index_path, 'w', encoding='utf-8') as f:
             json.dump(index, f, indent=2, ensure_ascii=False)
         print(f'\nIndex written to: {index_path}', file=sys.stderr)

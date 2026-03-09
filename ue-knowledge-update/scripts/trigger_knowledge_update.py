@@ -30,7 +30,7 @@ REPO_ROOT = find_engine_root()
 
 KNOWLEDGE_DIR = knowledge_dir(REPO_ROOT)
 MODULE_GRAPH = KNOWLEDGE_DIR / "module_graph.json"
-SUBSYSTEM_INDEX = KNOWLEDGE_DIR / "subsystem_index.json"
+SUBMODULE_INDEX = KNOWLEDGE_DIR / "submodule_index.json"
 
 # Modules in these paths are typically not worth updating knowledge for
 SKIP_PATTERNS = [
@@ -42,20 +42,20 @@ SKIP_PATTERNS = [
 ]
 
 # Cached submodule index (loaded once on first use)
-_subsystem_index = None
+_submodule_index = None
 
 
-def load_subsystem_index():
-    """Load subsystem_index.json for submodule detection."""
-    global _subsystem_index
-    if _subsystem_index is not None:
-        return _subsystem_index
-    if SUBSYSTEM_INDEX.exists():
-        with open(SUBSYSTEM_INDEX, 'r', encoding='utf-8') as f:
-            _subsystem_index = json.load(f)
+def load_submodule_index():
+    """Load submodule_index.json for submodule detection."""
+    global _submodule_index
+    if _submodule_index is not None:
+        return _submodule_index
+    if SUBMODULE_INDEX.exists():
+        with open(SUBMODULE_INDEX, 'r', encoding='utf-8') as f:
+            _submodule_index = json.load(f)
     else:
-        _subsystem_index = {}
-    return _subsystem_index
+        _submodule_index = {}
+    return _submodule_index
 
 
 def run_git(args, cwd=None):
@@ -101,7 +101,7 @@ def detect_submodule(module_name, filepath, parts):
     Returns submodule name or None.
     Detection methods:
     1. Subdirectory of Private/Public/Classes → dir name
-    2. Filename prefix → known prefix cluster from subsystem_index.json
+    2. Filename prefix → known prefix cluster from submodule_index.json
     """
     # Method 1: Subdirectory detection
     for i, part in enumerate(parts):
@@ -112,8 +112,8 @@ def detect_submodule(module_name, filepath, parts):
             if i + 2 < len(parts):
                 return next_part
 
-    # Method 2: Prefix cluster from subsystem_index.json
-    index = load_subsystem_index()
+    # Method 2: Prefix cluster from submodule_index.json
+    index = load_submodule_index()
     module_entry = index.get('modules', {}).get(module_name, {})
     known_submodules = module_entry.get('submodules', [])
 
