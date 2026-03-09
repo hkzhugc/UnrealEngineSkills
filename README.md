@@ -19,6 +19,30 @@ Working with UE source is hard for AI — 1,200+ modules, 40M+ lines of C++, and
 - Plan cross-module modifications in the correct dependency order
 - Discover and compose Blueprint-callable Python snippets via a catalog
 
+## Flow
+
+```
+UE Source Tree
+      │
+      ▼
+┌─────────────┐   Build.cs+shaders   ┌──────────────────────────────────────┐
+│  ue-knowledge│ ──────────────────► │ knowledge/                           │
+│    -init    │   LLM sub-agents     │   module_graph.json  shader_map.json │
+└─────────────┘ ──────────────────► │   modules/{Name}.md                  │
+                                     └──────────┬───────────────────────────┘
+      code                                      │ read
+      changes ──► ue-knowledge-update ──────────┤
+                                                │
+      open file ► ue-knowledge-reader ──────────┤
+                                                │
+      modded fork ──► ue-knowledge-port ────────┘
+                      (port_classify.py
+                       compares file trees,
+                       dispatches sub-agents)
+
+      editor Python ► ue-script-catalog
+```
+
 ## Skills
 
 ### `ue-knowledge-init` — Cold-Start Generator
@@ -63,6 +87,25 @@ Keeps the knowledge graph in sync after code changes. Classifies changed files b
 - Updates `shader_map.json` if shaders changed
 - Appends to `changelog.md`
 
+### `ue-knowledge-port` — Port to Modified Engine
+
+Migrates a knowledge graph from an original UE build to a heavily-modified fork where git diff is unreliable. A Python script compares file trees to compute per-module change rates, then dispatches sub-agents to copy, patch, or regenerate summaries.
+
+| Change rate | Category | Action |
+|-------------|----------|--------|
+| < 5% | `unchanged` | Copy summary, update paths + date |
+| 5–30% | `minor` | Edit affected sections |
+| 30–70% | `major` | Regenerate from target code |
+| > 70% | `rewritten` | Full init flow |
+| Target only | `new` | Full init flow |
+| Source only | `removed` | Skip |
+
+```bash
+python Engine/.claude/skills/ue-knowledge-port/scripts/port_classify.py \
+  --source D:/UE4.26/UnrealEngine --target D:/MyProject \
+  --source-agent-dir .claude --target-agent-dir .codebuddy
+```
+
 ### `ue-script-catalog` — Script Discovery & Execution
 
 Connects to a pre-built catalog of every Blueprint-callable function in the engine. Supports discovering functions by intent, composing Python snippets, and executing them in the editor via MCP.
@@ -90,6 +133,12 @@ Engine/.claude/skills/                    ← this repo
 │   ├── SKILL.md
 │   └── scripts/
 │       └── trigger_knowledge_update.py
+├── ue-knowledge-port/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   └── port_classify.py              ← file-tree comparison + JSON plan
+│   └── references/
+│       └── port-prompt.md                ← Unchanged/Minor/Major prompt templates
 └── ue-script-catalog/
     ├── SKILL.md
     └── references/

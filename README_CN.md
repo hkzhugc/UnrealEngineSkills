@@ -18,6 +18,30 @@ UE 源码对 AI 来说很难处理——1,200+ 个模块、4,000 万行以上的
 - 按正确的依赖顺序规划跨模块修改
 - 通过函数目录发现和编写 Blueprint 可调用的 Python 脚本
 
+## 整体流程
+
+```
+UE 源码树
+      │
+      ▼
+┌─────────────┐  Build.cs+Shader   ┌──────────────────────────────────────┐
+│  ue-knowledge│ ─────────────────► │ knowledge/                           │
+│    -init    │  LLM 子代理         │   module_graph.json  shader_map.json │
+└─────────────┘ ─────────────────► │   modules/{Name}.md                  │
+                                    └──────────┬───────────────────────────┘
+      代码                                     │ 读取
+      变更 ──► ue-knowledge-update ────────────┤
+                                               │
+      打开文件 ► ue-knowledge-reader ───────────┤
+                                               │
+      魔改分支 ──► ue-knowledge-port ───────────┘
+                   (port_classify.py
+                    对比文件树，
+                    分发子代理)
+
+      编辑器 Python ► ue-script-catalog
+```
+
 ## 技能一览
 
 ### `ue-knowledge-init` — 冷启动生成器
@@ -62,6 +86,25 @@ python Engine/.claude/skills/ue-knowledge-init/scripts/generate_summaries.py --t
 - 如果 Shader 有变更，更新 `shader_map.json`
 - 追加记录到 `changelog.md`
 
+### `ue-knowledge-port` — 移植到魔改引擎
+
+将知识图谱从原版引擎迁移到深度魔改的分支（git diff 不可靠时使用）。Python 脚本通过对比文件树计算每个模块的变更率，再按分类分发子代理进行复制、局部更新或重新生成。
+
+| 变更率 | 分类 | 操作 |
+|--------|------|------|
+| < 5% | `unchanged` | 复制摘要，更新路径和日期 |
+| 5–30% | `minor` | 编辑受影响的章节 |
+| 30–70% | `major` | 从目标代码重新生成 |
+| > 70% | `rewritten` | 走完整 init 流程 |
+| 仅 target 有 | `new` | 走完整 init 流程 |
+| 仅 source 有 | `removed` | 跳过 |
+
+```bash
+python Engine/.claude/skills/ue-knowledge-port/scripts/port_classify.py \
+  --source D:/UE4.26/UnrealEngine --target D:/MyProject \
+  --source-agent-dir .claude --target-agent-dir .codebuddy
+```
+
 ### `ue-script-catalog` — 脚本发现与执行
 
 连接到预构建的引擎 Blueprint 可调用函数目录。支持按意图搜索函数、编写 Python 代码片段，以及通过 MCP 在编辑器中执行。
@@ -89,6 +132,12 @@ Engine/.claude/skills/                    ← 本仓库
 │   ├── SKILL.md
 │   └── scripts/
 │       └── trigger_knowledge_update.py
+├── ue-knowledge-port/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   └── port_classify.py              ← 文件树对比 + JSON 分类计划
+│   └── references/
+│       └── port-prompt.md                ← Unchanged/Minor/Major 提示词模板
 └── ue-script-catalog/
     ├── SKILL.md
     └── references/
