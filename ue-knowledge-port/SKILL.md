@@ -127,64 +127,64 @@ python ... > port_plan.json
 
 ## Phase 2: Execute Port (Sub-Agent Dispatch)
 
-Read the classification JSON and process each module by category.
+Read the classification JSON. Process **every** module using the loop below.
+Do NOT stop after writing the top-level summary — submodule dispatch is part
+of the same loop iteration and is mandatory.
 
-### Category dispatch table
+### Prompt template reference
 
-| Category | Prompt template | Batch size |
-|----------|----------------|------------|
+| Category | Prompt template | Module batch size |
+|----------|----------------|-------------------|
 | `unchanged` | Port-Unchanged (Batch Variant) | 10 per turn |
 | `minor` | Port-Minor (Batch Variant) | 3 per turn |
 | `major` | Port-Major (Batch Variant) | 3 per turn |
 | `rewritten` / `new` | Single-Module Prompt from `ue-knowledge-init` | 5 per turn |
 | `removed` | Skip | — |
 
-All prompt templates are in:
-`Engine/.claude/skills/ue-knowledge-port/references/port-prompt.md`
+All port prompt templates: `Engine/.claude/skills/ue-knowledge-port/references/port-prompt.md`
 
-For `rewritten` / `new`, use the **Single-Module Prompt** (or Batch-Module Prompt)
+For `rewritten` / `new`: use the **Single-Module Prompt** (or Batch-Module Prompt)
 from `Engine/.claude/skills/ue-knowledge-init/references/summary-generation-prompt.md`,
 writing to the **target** knowledge directory.
 
-### Submodule handling
-
-**REQUIRED** — after every module's top-level summary is written, you MUST also
-process its submodules. Do not proceed to the next module until all submodules of
-the current module are done.
-
-For each module entry whose `submodules` array is non-empty:
-
-1. Collect all submodule entries from `module.submodules`
-2. Group them into batches of up to 4
-3. For each batch, dispatch a sub-agent using the **Submodule Variants** section
-   of `port-prompt.md`, with:
-   - `{ModuleName}` = the parent module name
-   - `{SubmoduleName}` = the submodule name
-   - `{changed_files_json}` = the submodule's own `changed_files` array
-   - Write path: `{target_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md`
-4. Verify each `.md` file exists before dispatching the next batch
-
-If a module has zero submodules (`submodules: []`), skip this step and move on.
-
 ### Processing order
 
-Process modules in tier order (to respect dependencies):
+Process modules in tier order:
 1. Tier 1: Core, CoreUObject, Engine, RHI, RenderCore, Renderer, …
 2. Tier 2: NavigationSystem, AIModule, PhysicsCore, …
 3. Tiers 3–4: Editor and everything else
 
-Within each tier, process by category: `unchanged` first (fast), then
-`minor`, `major`, `rewritten`/`new` last (most LLM work).
+Within each tier: `unchanged` first, then `minor`, `major`, `rewritten`/`new`.
 
-For each module, the mandatory execution sequence is:
+### Per-module execution loop (MANDATORY — follow exactly)
+
+For **each** module in the classification JSON (skipping `removed`):
+
 ```
-1. Dispatch module top-level summary sub-agent
-2. Verify {target_knowledge_dir}/modules/{Name}.md was written
-3. For each submodule batch → dispatch submodule sub-agent (see Submodule handling)
-4. Verify each submodule .md was written
-5. Move to next module
+STEP 1 — Top-level summary
+  a. Select prompt template based on module.category (see table above)
+  b. Dispatch sub-agent with filled prompt
+  c. Verify {target_knowledge_dir}/modules/{Name}.md was written
+     If missing → retry before proceeding
+
+STEP 2 — Submodule summaries  (DO NOT SKIP — required even for "unchanged" modules)
+  IF module.submodules is non-empty:
+    For each batch of up to 4 submodules:
+      a. Select prompt template based on submodule.category
+      b. Fill placeholders:
+           {ModuleName}          = parent module name
+           {SubmoduleName}       = submodule name
+           {changed_files_json}  = submodule.changed_files array (from JSON)
+           Write path            = {target_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md
+      c. Use the "Submodule Variants" section of port-prompt.md
+      d. Dispatch sub-agent
+      e. Verify each {SubmoduleName}.md was written before next batch
+  IF module.submodules is empty: skip to next module
+
+STEP 3 — Advance
+  Move to the next module. Do NOT start the next module's STEP 1 until
+  all submodules of the current module are verified written.
 ```
-Do NOT skip step 3 even if the module category is `unchanged`.
 
 ## Phase 3: Validate and Report
 
