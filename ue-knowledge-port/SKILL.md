@@ -30,6 +30,45 @@ module has changed, then applies the appropriate update strategy.
 2. Confirm source engine's knowledge has been generated:
    `{source}/.claude/knowledge/modules/` must contain `.md` files
 3. Ensure Python 3.6+: `python --version`
+4. Note whether the target knowledge dir already contains these files
+   (Phase 0 will regenerate all three unconditionally):
+   - `{target}/.claude/knowledge/module_graph.json`
+   - `{target}/.claude/knowledge/submodule_index.json`
+   - `{target}/.claude/knowledge/shader_map.json`
+
+## Phase 0: Rebuild Target Structural Indexes (No LLM)
+
+Run **before** `port_classify.py`. These are deterministic scripts that scan
+the target engine's source tree. They take seconds to minutes and require no
+LLM. Results are consumed by Phase 2 sub-agents when regenerating summaries.
+
+```bash
+INIT=Engine/.claude/skills/ue-knowledge-init/scripts
+
+# 0a — Module dependency graph (tier, type, deps for every module)
+python $INIT/parse_module_graph.py --engine-root /path/to/target-engine
+
+# 0b — Submodule boundaries (subdirectory + prefix-cluster detection)
+python $INIT/detect_submodules.py --auto --save-index \
+  --engine-root /path/to/target-engine
+
+# 0c — Shader → C++ mapping
+python $INIT/generate_shader_map.py --engine-root /path/to/target-engine
+```
+
+**Outputs** (all written to `{target}/.claude/knowledge/`):
+- `module_graph.json` — used by Port-Major/Rewritten sub-agents for
+  tier, type, and dependency context when regenerating summaries
+- `submodule_index.json` — used by Phase 2 sub-agents for accurate
+  submodule boundary detection (includes prefix-cluster submodules that
+  `port_classify.py`'s built-in detector does not find)
+- `shader_map.json` — used by Renderer/RHI sub-agents for shader references
+
+If any script fails, note the error and continue — the other two outputs
+are independent. Phase 2 sub-agents degrade gracefully if a file is absent.
+
+**Passing the target engine root**: same rules as `port_classify.py` — pass
+the directory that *contains* `Engine/` (e.g. `D:/UE4.26/UnrealEngine`).
 
 ## Sub-Agent Dispatch Pattern
 
