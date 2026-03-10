@@ -169,17 +169,17 @@ STEP 1 — Top-level summary
 
 STEP 2 — Submodule summaries  (DO NOT SKIP — required even for "unchanged" modules)
   IF module.submodules is non-empty:
-    For each batch of up to 4 submodules:
-      a. Select prompt template based on submodule.category
-      b. Fill placeholders:
-           {ModuleName}          = parent module name
-           {SubmoduleName}       = submodule name
-           {changed_files_json}  = submodule.changed_files array (from JSON)
-           Write path            = {target_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md
-      c. Use the "Submodule Variants" section of port-prompt.md
+    count = len(module.submodules)
+    Split into ceil(count/4) batches of up to 4 entries each.
+    For each batch:
+      a. Paste the batch's JSON objects verbatim from module.submodules
+      b. Use the "Submodule Batch Prompt" template from port-prompt.md
+      c. Fill: {ModuleName}, {N}, {batch_num}/{total_batches}, {target_path},
+               {source_knowledge_dir}, {target_knowledge_dir}, {today}
       d. Dispatch sub-agent
-      e. Verify each {SubmoduleName}.md was written before next batch
-  IF module.submodules is empty: skip to next module
+      e. Verify each {ModuleName}/{SubmoduleName}.md exists before next batch
+    All module.submodules entries must be covered — do not filter or skip any.
+  IF module.submodules is empty: proceed to STEP 3
 
 STEP 3 — Advance
   Move to the next module. Do NOT start the next module's STEP 1 until

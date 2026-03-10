@@ -234,18 +234,54 @@ using changed_files to prioritise which files to read.
 
 ---
 
-## Submodule Variants
+## Submodule Batch Prompt
 
-For each submodule entry in the module's `submodules` array, use the same
-category logic but scope to the submodule directory:
+Use for up to 4 submodules of one parent module per sub-agent turn.
+Take entries from `module.submodules` in the classification JSON.
+Process ALL entries across as many turns as needed — do not skip any.
 
-**Submodule-Unchanged**: Same as Port-Unchanged but with path
-  `modules/{ModuleName}/{SubmoduleName}.md`
+```
+Port submodule summaries for {N} submodules of "{ModuleName}".
+[batch {batch_num} of {total_batches}]
 
-**Submodule-Minor / Major**: Same as module variants but:
-- Read parent module summary first (once, reuse for all submodules)
-- Scope file reads to `{target_path}/{subdir}/{SubmoduleName}/`
-- Use `changed_files` from the submodule's classify entry (truncated to 20)
-- Write to `{target_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md`
-- Use the submodule template:
-  `Engine/.claude/skills/ue-knowledge-init/references/submodule-template.md`
+Context:
+  Parent module summary (source): {source_knowledge_dir}/modules/{ModuleName}.md
+  Target module path: {target_path}
+  Source knowledge dir: {source_knowledge_dir}
+  Target knowledge dir: {target_knowledge_dir}
+  Today: {today}
+
+Submodule template: Engine/.claude/skills/ue-knowledge-init/references/submodule-template.md
+
+Submodules to process ({N} total — process every one):
+[paste the N submodule JSON objects from module.submodules verbatim]
+
+Read the parent module summary ONCE, then for EACH submodule:
+
+  category == "unchanged":
+    1. Read {source_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md
+    2. Grep 2-3 key class names in {target_path}/Public/ and /Private/
+    3. All found → copy, replace source engine path with target engine path,
+       update "Last Updated", write to target path
+    4. Any missing → treat as "minor" (follow steps below)
+
+  category == "minor":
+    1. Read {source_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md
+    2. For files in changed_files with added_symbols/removed_symbols: record names
+    3. For files with changed_symbols: grep symbol in {target_path}, read 30 lines
+    4. For status="added" files: read first 200 lines
+    5. Copy source summary, edit ONLY affected sections, update date, write to target
+
+  category == "major" / "rewritten" / source summary missing:
+    1. Glob {target_path}/Public/**/*.h — read up to 3 headers near submodule dir
+    2. For changed_files with added_symbols non-empty: read full file (≤300 lines)
+    3. Generate new summary using submodule template (30-80 lines)
+    4. All class names and paths must come from files you actually read
+    5. Write to target path
+
+Write path for every submodule:
+  {target_knowledge_dir}/modules/{ModuleName}/{SubmoduleName}.md
+The Write tool creates parent directories automatically — do not mkdir.
+
+After each write, confirm the file exists before proceeding to the next submodule.
+```
