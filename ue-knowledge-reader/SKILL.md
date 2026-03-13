@@ -2,13 +2,18 @@
 name: ue-knowledge-reader
 description: >
   Navigate and understand Unreal Engine code using the pre-built knowledge graph.
-  Use this skill whenever working with UE source code, trying to understand module
-  relationships, planning cross-module changes, investigating shader-to-C++ bindings,
-  or when the user asks about UE architecture. Also use when the user opens an
-  engine source file and needs context about which module it belongs to, what that
-  module does, and how it connects to other modules. Activate for any question
-  involving UE module dependencies, rendering pipeline, engine submodules, or
-  "how does X work in UE".
+
+  Invoke in two scenarios:
+  1. Understanding: When trying to understand UE module relationships, architecture,
+     shader-to-C++ bindings, or "how does X work in UE".
+  2. Coverage check: Before any cross-module code modification (editing files in 2+
+     different UE modules), check whether involved modules have summaries and
+     generate missing ones on demand. This keeps the knowledge graph current.
+
+  Also activate when the user opens an engine source file and needs context about
+  which module it belongs to, what that module does, and how it connects to other
+  modules. Activate for any question involving UE module dependencies, rendering
+  pipeline, engine submodules, or "how does X work in UE".
 allowed-tools: Read Write Bash(python*) Glob Grep Task
 ---
 
@@ -112,6 +117,21 @@ Upstream (may need changes): RHI (if new RHI commands), Engine (if new proxy dat
 Downstream (may break): no direct dependents modify this path
 Shader impact: MobileBasePassVertexShader.usf (check shader_map.json)
 ```
+
+### Before a cross-module modification
+
+When about to edit files across 2+ UE modules:
+
+1. **Identify all involved modules** from file paths in the task/plan
+2. **Check coverage** — for each module, check if `modules/{Name}.md` exists:
+   ```bash
+   $QUERY info Module1,Module2,Module3
+   ```
+   Then verify each has a summary file via Glob.
+3. **Generate missing summaries** — for each module without a `.md` file,
+   trigger on-demand generation (see "On-Demand Generation" below)
+4. **Load relevant summaries** for the modules being modified
+5. **After edits complete**: consider triggering `ue-knowledge-update` for changed modules
 
 ### User asks about dependencies
 1. Use the query tool:

@@ -33,6 +33,9 @@ Quality rules:
 - Key Concepts lists actual classes from headers you read
 - Entry Points have verified file paths (confirmed via Glob)
 - No fabricated class names or file paths
+- For classes that serve as cross-module data carriers (passed between modules as
+  function parameters or stored in shared structures), list 2-3 key fields in
+  the Key Concepts description, not just the class name
 - Set "Last Updated" to {today's date}
 ```
 
