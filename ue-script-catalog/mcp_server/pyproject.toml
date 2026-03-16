@@ -1,0 +1,15 @@
+[project]
+name = "unreal-agent-bridge-mcp"
+version = "1.0.0"
+description = "MCP server bridging AI agents to UnrealAgentBridge TCP plugin"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.4.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+unreal-agent-bridge-mcp = "unreal_agent_bridge_mcp:main"
